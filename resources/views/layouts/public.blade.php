@@ -27,8 +27,6 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link active" href="{{ url('/') }}">Beranda</a></li>
-                    <!-- Menu Peta akan kita aktifkan di Tahap 12 -->
-                    <li class="nav-item"><a class="nav-link {{ request()->is('peta') ? 'active' : '' }}" href="{{ url('/peta') }}">Peta Persebaran</a></li>
                     <li class="nav-item ms-lg-3"><a class="btn btn-outline-light btn-sm mt-1" href="{{ url('/login') }}"><i class="fas fa-sign-in-alt me-1"></i> Login Operator</a></li>
                 </ul>
             </div>

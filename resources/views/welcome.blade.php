@@ -13,8 +13,21 @@
 <div class="container mt-5" id="statistik">
     <div class="text-center mb-5">
         <h3 class="fw-bold text-secondary">Ringkasan Capaian Nasional</h3>
-        <p class="text-muted">Data terbaru hasil konsolidasi penyelenggaraan SPM.</p>
+        <p class="text-muted">Statistik dan peta menggunakan tahun data aktif yang sama.</p>
     </div>
+
+    <form action="{{ route('home') }}#statistik" method="GET" class="row justify-content-center mb-4">
+        <div class="col-sm-5 col-md-4">
+            <label for="statistik-year" class="form-label fw-bold">Tahun Data Aktif</label>
+            <select id="statistik-year" name="year" class="form-select" onchange="this.form.submit()" {{ $availableYears->isEmpty() ? 'disabled' : '' }}>
+                @forelse ($availableYears as $availableYear)
+                    <option value="{{ $availableYear }}" @selected((string) $year === (string) $availableYear)>Tahun {{ $availableYear }}</option>
+                @empty
+                    <option>Belum ada data</option>
+                @endforelse
+            </select>
+        </div>
+    </form>
 
     <!-- Baris Statistik -->
     <div class="row text-center mb-5 justify-content-center">
@@ -74,4 +87,30 @@
         </div>
     </div>
 </div>
+
+<div class="container mt-5">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h4 class="mb-0 fw-bold text-secondary"><i class="fas fa-map-marked-alt me-2"></i>Peta Sebaran SPM</h4>
+            <small class="text-muted">@if ($year) Data tahun {{ $year }}. @else Belum ada data SPM untuk ditampilkan. @endif</small>
+        </div>
+        <div class="card-body"><div id="spm-map" role="img" aria-label="Peta sebaran SPM berdasarkan provinsi"></div></div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>#spm-map { height: 600px; width: 100%; border-radius: 10px; } .spm-map-legend { background: white; padding: 10px; line-height: 24px; } .spm-map-legend i { width: 18px; height: 18px; float: left; margin-right: 8px; }</style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const mapDataDb = {{ Illuminate\Support\Js::from($mapData) }};
+const activeYear = {{ Illuminate\Support\Js::from($year) }};
+const spmMap = L.map('spm-map').setView([-2.5489, 118.0149], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(spmMap);
+const provinceKey = name => String(name || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+function addText(parent, tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; parent.appendChild(element); return element; }
+function popup(provinceName, data) { const box = document.createElement('div'); addText(box, 'h6', provinceName.toUpperCase(), 'fw-bold mb-1'); const badge = addText(box, 'span', data.kategori, 'badge'); badge.style.backgroundColor = data.warna; const list = document.createElement('ul'); list.className = 'list-unstyled mt-2 mb-0'; addText(list, 'li', `Rata-rata Nilai: ${data.rata_nilai}`); addText(list, 'li', `Total Pos: ${data.total_pos}`); addText(list, 'li', `Total SDM: ${data.total_sdm}`); box.appendChild(list); const link = addText(box, 'a', 'Lihat Kabupaten/Kota', 'btn btn-sm btn-primary w-100 mt-3'); link.href = `{{ url('/provinsi') }}/${encodeURIComponent(String(data.id))}?year=${encodeURIComponent(String(activeYear))}`; return box; }
+let geoJsonLayer;
+fetch('{{ url('geojson/indonesia-prov.geojson') }}').then(response => response.json()).then(data => { geoJsonLayer = L.geoJson(data, { style: feature => { const name = feature.properties.PROVINSI || feature.properties.Propinsi || feature.properties.name; const province = mapDataDb[provinceKey(name)]; return { fillColor: province ? province.warna : '#cccccc', weight: 2, color: 'white', fillOpacity: .7 }; }, onEachFeature: (feature, layer) => { const name = feature.properties.PROVINSI || feature.properties.Propinsi || feature.properties.name || 'Tidak Diketahui'; const province = mapDataDb[provinceKey(name)]; if (province) { layer.bindPopup(popup(name, province)); } else { const empty = document.createElement('div'); addText(empty, 'strong', name); empty.appendChild(document.createElement('br')); addText(empty, 'span', 'Belum ada data.'); layer.bindPopup(empty); } layer.on({ mouseover: event => event.target.setStyle({ weight: 4, color: '#333' }), mouseout: event => geoJsonLayer.resetStyle(event.target) }); } }).addTo(spmMap); }).catch(error => console.error('Error loading geojson:', error));
+const legend = L.control({ position: 'bottomright' }); legend.onAdd = () => { const div = L.DomUtil.create('div', 'spm-map-legend'); addText(div, 'strong', 'Kategori SPM'); [['#198754', 'Sangat Baik'], ['#0d6efd', 'Baik'], ['#ffc107', 'Cukup'], ['#dc3545', 'Kurang'], ['#cccccc', 'Belum ada data']].forEach(([color, label]) => { const row = document.createElement('div'); const swatch = document.createElement('i'); swatch.style.backgroundColor = color; row.appendChild(swatch); addText(row, 'span', label); div.appendChild(row); }); return div; }; legend.addTo(spmMap);
+</script>
 @endsection

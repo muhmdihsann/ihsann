@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\SpmDataImport;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB; // Wajib untuk Transaction
-use App\Models\Province; // Wajib untuk Master Data
-use App\Models\Regency;
 use App\Models\ImportHistory;
-use App\Models\SpmData;
+use App\Models\Province;
+use App\Models\Regency;
+use App\Models\SpmData; // Wajib untuk Transaction
+use Illuminate\Http\Request; // Wajib untuk Master Data
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ImportController extends Controller
 {
@@ -25,19 +25,19 @@ class ImportController extends Controller
     {
         $request->validate([
             'file' => 'required|mimes:xls,xlsx',
-            'year' => 'required|numeric|digits:4'
+            'year' => 'required|numeric|digits:4',
         ], [
             'file.required' => 'File Excel wajib diunggah.',
             'file.mimes' => 'Format file harus .xls atau .xlsx',
-            'year.required' => 'Tahun data wajib diisi.'
+            'year.required' => 'Tahun data wajib diisi.',
         ]);
 
         // Simpan nama file untuk digunakan di tahap import selanjutnya
-        $fileName = time() . '_' . $request->file('file')->getClientOriginalName();
-        $request->file('file')->storeAs('temp', $fileName);
+        $fileName = $request->file('file')->hashName();
+        $storedFilePath = $request->file('file')->storeAs('temp', $fileName, 'local');
 
         // Baca data dari Excel langsung dari request file
-        $dataExcel = Excel::toArray(new SpmDataImport, $request->file('file'))[0];
+        $dataExcel = Excel::toArray(new SpmDataImport, Storage::disk('local')->path($storedFilePath))[0] ?? [];
 
         $validData = [];
         $invalidData = [];
@@ -52,12 +52,12 @@ class ImportController extends Controller
 
             // Validasi: Pastikan nilai akhir (indeks 21) adalah angka
             $nilaiAkhir = $row[21];
-            if (!is_numeric($nilaiAkhir) && !is_null($nilaiAkhir)) {
+            if (! is_numeric($nilaiAkhir) && ! is_null($nilaiAkhir)) {
                 $invalidData[] = [
                     'row' => $index + 6, // +6 karena startRow kita 6
                     'provinsi' => $row[1],
                     'kabupaten' => $row[2],
-                    'alasan' => 'Nilai Akhir bukan format angka'
+                    'alasan' => 'Nilai Akhir bukan format angka',
                 ];
             } else {
                 $validData[] = $row;
@@ -74,20 +74,21 @@ class ImportController extends Controller
     {
         $request->validate([
             'file_name' => 'required',
-            'year' => 'required'
+            'year' => 'required',
         ]);
 
-        $fileName = $request->file_name;
+        $fileName = basename($request->file_name);
         $year = $request->year;
-        $filePath = storage_path('app/temp/' . $fileName);
+        $filePath = 'temp/'.$fileName;
+        $storage = Storage::disk('local');
 
         // Pastikan file masih ada
-        if (!file_exists($filePath)) {
+        if (! $storage->exists($filePath)) {
             return redirect('/admin/import')->with('error', 'File temporary tidak ditemukan. Silakan upload ulang.');
         }
 
         // Baca ulang data dari file temporary
-        $dataExcel = Excel::toArray(new SpmDataImport, $filePath)[0];
+        $dataExcel = Excel::toArray(new SpmDataImport, $storage->path($filePath))[0] ?? [];
 
         $successCount = 0;
 
@@ -102,7 +103,7 @@ class ImportController extends Controller
                 'year' => $year,
                 'status' => 'Berhasil', // Default, nanti diupdate kalau ada error parsial
                 'total_row' => count($dataExcel),
-                'success_row' => 0
+                'success_row' => 0,
             ]);
 
             // 2. Looping data untuk disimpan
@@ -124,34 +125,34 @@ class ImportController extends Controller
                 // B. Cari atau buat Data Kabupaten/Kota
                 $regency = Regency::firstOrCreate(
                     ['province_id' => $province->id, 'name' => $namaKabupaten],
-                    ['code' => substr(md5($namaKabupaten), 0, 8)] // Generate kode sementara
+                    ['code' => substr(md5($province->id.'|'.$namaKabupaten), 0, 8)] // Generate kode sementara
                 );
 
                 // C. Simpan/Update Data SPM (UpdateOrCreate agar jika diimport ulang tahun yang sama, datanya menimpa)
                 SpmData::updateOrCreate(
                     [
                         'regency_id' => $regency->id,
-                        'year' => $year
+                        'year' => $year,
                     ],
                     [
                         'import_history_id' => $importHistory->id,
-                        'jml_kecamatan' => (int)$row[6],
-                        'jml_pos' => (int)$row[7],
-                        'pr_pos_kecamatan' => (float)$row[8] * 100,
-                        'total_sdm' => (int)$row[9],
-                        'sdm_sertifikat' => (int)$row[10],
-                        'pr_sdm_sertifikat' => (float)$row[11] * 100,
-                        'jml_desa' => (int)$row[12],
-                        'jml_redkar' => (int)$row[13],
-                        'pr_redkar' => (float)$row[14] * 100,
-                        'dimensi_kelembagaan' => (float)$row[15],
-                        'dimensi_perencanaan' => (float)$row[16],
-                        'dimensi_capaian' => (float)$row[17],
-                        'dimensi_sarpras' => (float)$row[18],
-                        'dimensi_sdm_sertifikat' => (float)$row[19],
-                        'dimensi_pemberdayaan' => (float)$row[20],
-                        'nilai_akhir' => (float)$row[21],
-                        'kategori' => $row[22]
+                        'jml_kecamatan' => (int) $row[6],
+                        'jml_pos' => (int) $row[7],
+                        'pr_pos_kecamatan' => (float) $row[8] * 100,
+                        'total_sdm' => (int) $row[9],
+                        'sdm_sertifikat' => (int) $row[10],
+                        'pr_sdm_sertifikat' => (float) $row[11] * 100,
+                        'jml_desa' => (int) $row[12],
+                        'jml_redkar' => (int) $row[13],
+                        'pr_redkar' => (float) $row[14] * 100,
+                        'dimensi_kelembagaan' => (float) $row[15],
+                        'dimensi_perencanaan' => (float) $row[16],
+                        'dimensi_capaian' => (float) $row[17],
+                        'dimensi_sarpras' => (float) $row[18],
+                        'dimensi_sdm_sertifikat' => (float) $row[19],
+                        'dimensi_pemberdayaan' => (float) $row[20],
+                        'nilai_akhir' => (float) $row[21],
+                        'kategori' => $row[22],
                     ]
                 );
 
@@ -164,13 +165,15 @@ class ImportController extends Controller
             DB::commit();
 
             // Hapus file temporary setelah selesai
-            unlink($filePath);
+            $storage->delete($filePath);
 
-            return redirect('/admin/dashboard')->with('success', "Import berhasil! {$successCount} data SPM tahun {$year} telah masuk ke database.");
+            return redirect('/admin/dashboard?year='.urlencode($year))
+                ->with('success', "Import berhasil! {$successCount} data SPM tahun {$year} telah masuk ke database.");
 
         } catch (\Exception $e) {
             DB::rollback();
-            return redirect('/admin/import')->with('error', 'Terjadi kesalahan saat menyimpan ke database: ' . $e->getMessage());
+
+            return redirect('/admin/import')->with('error', 'Terjadi kesalahan saat menyimpan ke database: '.$e->getMessage());
         }
     }
 }

@@ -2,33 +2,47 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Province;
-use App\Models\Regency;
 use App\Models\SpmData;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // 1. Hitung statistik dasar (Card)
-        $totalProvinces = Province::count();
-        $totalRegencies = Regency::count();
-        $totalSpmData = SpmData::count();
-        $avgNilaiAkhir = SpmData::avg('nilai_akhir');
+        $availableYears = SpmData::query()
+            ->select('year')
+            ->distinct()
+            ->orderByDesc('year')
+            ->pluck('year');
 
-        // 2. Data untuk Grafik Distribusi Kategori (Pie Chart)
-        $kategoriSangatBaik = SpmData::where('kategori', 'Sangat Baik')->count();
-        $kategoriBaik = SpmData::where('kategori', 'Baik')->count();
-        $kategoriCukup = SpmData::where('kategori', 'Cukup')->count();
-        $kategoriKurang = SpmData::where('kategori', 'Kurang')->count();
+        $year = $request->filled('year')
+            ? (int) $request->input('year')
+            : $availableYears->first();
 
-        // 3. Data untuk Grafik Perbandingan Provinsi (Bar Chart)
-        // Kita menggunakan Query Builder (Join) untuk mengelompokkan data berdasarkan Provinsi
-        $provinsiData = SpmData::join('regencies', 'spm_data.regency_id', '=', 'regencies.id')
+        $spmQuery = SpmData::query();
+        if ($year !== null) {
+            $spmQuery->where('year', $year);
+        }
+
+        $totalSpmData = (clone $spmQuery)->count();
+        $totalRegencies = (clone $spmQuery)->distinct('regency_id')->count('regency_id');
+        $totalProvinces = (clone $spmQuery)
+            ->join('regencies', 'spm_data.regency_id', '=', 'regencies.id')
+            ->distinct('regencies.province_id')
+            ->count('regencies.province_id');
+        $avgNilaiAkhir = (clone $spmQuery)->avg('nilai_akhir');
+
+        $kategoriSangatBaik = (clone $spmQuery)->where('kategori', 'Sangat Baik')->count();
+        $kategoriBaik = (clone $spmQuery)->where('kategori', 'Baik')->count();
+        $kategoriCukup = (clone $spmQuery)->where('kategori', 'Cukup')->count();
+        $kategoriKurang = (clone $spmQuery)->where('kategori', 'Kurang')->count();
+
+        $provinsiData = SpmData::query()
+            ->when($year !== null, fn ($query) => $query->where('spm_data.year', $year))
+            ->join('regencies', 'spm_data.regency_id', '=', 'regencies.id')
             ->join('provinces', 'regencies.province_id', '=', 'provinces.id')
             ->selectRaw('provinces.name as provinsi,
+                         provinces.id as provinsi_id,
                          AVG(nilai_akhir) as rata_nilai,
                          SUM(jml_pos) as total_pos,
                          SUM(total_sdm) as total_sdm')
@@ -36,16 +50,53 @@ class DashboardController extends Controller
             ->orderBy('provinces.name')
             ->get();
 
-        // Ekstrak data menjadi array agar mudah dibaca oleh Chart.js
-        $labelProvinsi = $provinsiData->pluck('provinsi');
-        $dataNilai = $provinsiData->pluck('rata_nilai');
-        $dataPos = $provinsiData->pluck('total_pos');
-        $dataSdm = $provinsiData->pluck('total_sdm');
+        $mapData = [];
+        foreach ($provinsiData as $province) {
+            $average = (float) $province->rata_nilai;
+            $category = 'Belum Ada Data';
+            $color = '#cccccc';
 
-        return view('dashboard.index', compact(
-            'totalProvinces', 'totalRegencies', 'totalSpmData', 'avgNilaiAkhir',
-            'kategoriSangatBaik', 'kategoriBaik', 'kategoriCukup', 'kategoriKurang',
-            'labelProvinsi', 'dataNilai', 'dataPos', 'dataSdm'
-        ));
+            if ($province->rata_nilai !== null) {
+                if ($average >= 85) {
+                    $category = 'Sangat Baik';
+                    $color = '#198754';
+                } elseif ($average >= 70) {
+                    $category = 'Baik';
+                    $color = '#0d6efd';
+                } elseif ($average >= 55) {
+                    $category = 'Cukup';
+                    $color = '#ffc107';
+                } else {
+                    $category = 'Kurang';
+                    $color = '#dc3545';
+                }
+            }
+
+            $mapData[strtoupper($province->provinsi)] = [
+                'id' => $province->provinsi_id,
+                'rata_nilai' => number_format($average, 2),
+                'kategori' => $category,
+                'warna' => $color,
+                'total_pos' => (int) ($province->total_pos ?? 0),
+                'total_sdm' => (int) ($province->total_sdm ?? 0),
+                'year' => $year,
+            ];
+        }
+
+        return view('dashboard.index', [
+            'totalProvinces' => $totalProvinces,
+            'totalRegencies' => $totalRegencies,
+            'totalSpmData' => $totalSpmData,
+            'avgNilaiAkhir' => $avgNilaiAkhir,
+            'kategoriSangatBaik' => $kategoriSangatBaik,
+            'kategoriBaik' => $kategoriBaik,
+            'kategoriCukup' => $kategoriCukup,
+            'kategoriKurang' => $kategoriKurang,
+            'labelProvinsi' => $provinsiData->pluck('provinsi'),
+            'dataNilai' => $provinsiData->pluck('rata_nilai'),
+            'mapData' => $mapData,
+            'availableYears' => $availableYears,
+            'year' => $year,
+        ]);
     }
 }
