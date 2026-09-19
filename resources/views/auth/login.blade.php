@@ -8,10 +8,13 @@
     <title>Login Operator | SPM Kebakaran</title>
 
     <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        rel="stylesheet">
 
     <!-- Font Awesome -->
-    <link rel="stylesheet"
+    <link
+        rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <style>
@@ -22,116 +25,193 @@
         html,
         body {
             width: 100%;
-            height: 100%;
+            min-height: 100%;
             margin: 0;
             font-family: "Segoe UI", Arial, sans-serif;
-            background: #f8fafc;
+            background: #f5f7fa;
         }
 
-        /* =========================
+        body {
+            overflow-x: hidden;
+        }
+
+        /* =====================================================
            MAIN LAYOUT
-        ========================= */
+        ===================================================== */
 
         .login-wrapper {
             min-height: 100vh;
             display: flex;
-            overflow: hidden;
+            background: #f5f7fa;
         }
 
-        /* =========================
-           LEFT SIDE
-        ========================= */
+
+        /* =====================================================
+           LEFT / VISUAL SIDE
+        ===================================================== */
 
         .visual-side {
             width: 58%;
             min-height: 100vh;
             position: relative;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+
+            /*
+             * GANTI GAMBAR DI:
+             * public/images/login-bg.jpg
+             *
+             * Tidak perlu mengubah kode ini lagi.
+             */
 
             background-image:
                 linear-gradient(
-                    120deg,
-                    rgba(7, 18, 35, 0.94),
-                    rgba(10, 31, 52, 0.82)
+                    115deg,
+                    rgba(3, 15, 30, 0.94) 0%,
+                    rgba(4, 24, 44, 0.86) 45%,
+                    rgba(8, 30, 52, 0.72) 100%
                 ),
-                url('https://images.unsplash.com/photo-1599839619722-39751411ea63?q=80&w=1600&auto=format&fit=crop');
+                url("{{ asset('images/login-bg.jpg') }}");
 
             background-size: cover;
             background-position: center;
+            background-repeat: no-repeat;
 
-            display: flex;
-            align-items: center;
-
-            color: white;
+            color: #ffffff;
         }
 
+        /* Efek gelap tambahan di bagian bawah */
+        .visual-side::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+
+            background:
+                linear-gradient(
+                    to top,
+                    rgba(2, 10, 20, 0.45),
+                    transparent 50%
+                );
+
+            pointer-events: none;
+        }
+
+        /* Lingkaran dekoratif */
         .visual-side::after {
             content: "";
             position: absolute;
-            width: 500px;
-            height: 500px;
+
+            width: 620px;
+            height: 620px;
+
             border-radius: 50%;
-            background: rgba(220, 38, 38, 0.08);
-            top: -200px;
-            right: -180px;
+
+            background:
+                radial-gradient(
+                    circle,
+                    rgba(220, 38, 38, 0.12) 0%,
+                    rgba(220, 38, 38, 0.03) 50%,
+                    transparent 70%
+                );
+
+            top: -260px;
+            right: -240px;
+
+            pointer-events: none;
         }
+
+
+        /* =====================================================
+           VISUAL CONTENT
+        ===================================================== */
 
         .visual-content {
             position: relative;
-            z-index: 2;
-            padding: 70px;
-            max-width: 850px;
+            z-index: 5;
+
+            width: 100%;
+            max-width: 900px;
+
+            padding: 70px 75px;
         }
 
-        /* Logo */
+
+        /* =====================================================
+           GOVERNMENT BRAND
+        ===================================================== */
 
         .government-brand {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 55px;
+
+            margin-bottom: 58px;
         }
 
         .brand-icon {
-            width: 48px;
-            height: 48px;
+            width: 50px;
+            height: 50px;
 
             display: flex;
             align-items: center;
             justify-content: center;
 
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 13px;
 
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.10);
+
+            border: 1px solid rgba(255, 255, 255, 0.18);
+
+            backdrop-filter: blur(10px);
 
             font-size: 20px;
+
+            box-shadow:
+                0 8px 30px rgba(0, 0, 0, 0.12);
         }
 
         .brand-text small {
             display: block;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 11px;
-            letter-spacing: 1.2px;
+
+            color: rgba(255, 255, 255, 0.60);
+
+            font-size: 10px;
+            font-weight: 600;
+
+            letter-spacing: 1.5px;
+
             text-transform: uppercase;
+
+            margin-bottom: 3px;
         }
 
         .brand-text strong {
             display: block;
-            font-size: 14px;
-            letter-spacing: 0.3px;
+
+            color: #ffffff;
+
+            font-size: 15px;
+            font-weight: 650;
+
+            letter-spacing: 0.2px;
         }
 
-        /* Badge */
+
+        /* =====================================================
+           SYSTEM BADGE
+        ===================================================== */
 
         .system-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 9px;
 
-            padding: 8px 14px;
+            padding: 9px 15px;
 
-            background: rgba(220, 38, 38, 0.15);
-            border: 1px solid rgba(248, 113, 113, 0.35);
+            background: rgba(220, 38, 38, 0.13);
+
+            border: 1px solid rgba(248, 113, 113, 0.30);
 
             border-radius: 50px;
 
@@ -141,146 +221,217 @@
             font-weight: 600;
 
             margin-bottom: 22px;
+
+            backdrop-filter: blur(8px);
         }
 
+        .system-badge i {
+            color: #f87171;
+        }
+
+
+        /* =====================================================
+           SYSTEM TITLE
+        ===================================================== */
+
         .system-title {
-            font-size: clamp(38px, 4vw, 62px);
-            line-height: 1.08;
-            font-weight: 700;
+            margin: 0 0 22px;
 
-            letter-spacing: -1.5px;
+            font-size: clamp(42px, 4.2vw, 64px);
 
-            margin-bottom: 22px;
+            line-height: 1.04;
+
+            font-weight: 750;
+
+            letter-spacing: -2.2px;
+
+            color: #ffffff;
         }
 
         .system-title span {
             color: #ef4444;
         }
 
+
+        /* =====================================================
+           DESCRIPTION
+        ===================================================== */
+
         .system-description {
-            max-width: 650px;
+            max-width: 680px;
 
-            color: rgba(255, 255, 255, 0.62);
+            margin: 0 0 36px;
 
-            font-size: 16px;
+            color: rgba(255, 255, 255, 0.66);
+
+            font-size: 15px;
+
             line-height: 1.8;
-
-            margin-bottom: 35px;
         }
 
-        /* Information */
+
+        /* =====================================================
+           INFORMATION ITEMS
+        ===================================================== */
 
         .system-info {
             display: flex;
-            gap: 35px;
+            flex-wrap: wrap;
+            gap: 28px;
         }
 
         .info-item {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 9px;
 
-            color: rgba(255, 255, 255, 0.55);
+            color: rgba(255, 255, 255, 0.58);
 
-            font-size: 13px;
+            font-size: 12px;
+            font-weight: 500;
         }
 
         .info-item i {
             color: #ef4444;
+            font-size: 13px;
         }
 
-        /* =========================
-           RIGHT SIDE
-        ========================= */
+
+        /* =====================================================
+           RIGHT FORM SIDE
+        ===================================================== */
 
         .form-side {
             width: 42%;
             min-height: 100vh;
 
-            background: #f8fafc;
-
             display: flex;
             align-items: center;
             justify-content: center;
 
-            padding: 40px;
+            padding: 50px 55px;
 
             position: relative;
+
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(220, 38, 38, 0.035),
+                    transparent 35%
+                ),
+                #f8fafc;
         }
+
+
+        /* =====================================================
+           FORM CONTAINER
+        ===================================================== */
 
         .form-container {
             width: 100%;
-            max-width: 430px;
+            max-width: 440px;
         }
 
-        /* Header */
+
+        /* =====================================================
+           LOGIN HEADER
+        ===================================================== */
 
         .login-header {
-            margin-bottom: 32px;
+            margin-bottom: 27px;
         }
 
         .login-icon {
-            width: 56px;
-            height: 56px;
+            width: 58px;
+            height: 58px;
 
             display: flex;
             align-items: center;
             justify-content: center;
 
-            background: #fef2f2;
+            margin-bottom: 19px;
+
+            border-radius: 15px;
+
             color: #dc2626;
 
-            border-radius: 14px;
+            background:
+                linear-gradient(
+                    145deg,
+                    #fff1f2,
+                    #fef2f2
+                );
+
+            border: 1px solid #fee2e2;
 
             font-size: 21px;
 
-            margin-bottom: 20px;
+            box-shadow:
+                0 8px 20px rgba(220, 38, 38, 0.07);
         }
 
         .login-header h2 {
+            margin: 0 0 7px;
+
             color: #111827;
 
-            font-size: 29px;
-            font-weight: 700;
+            font-size: 30px;
 
-            margin-bottom: 8px;
+            font-weight: 750;
+
+            letter-spacing: -0.7px;
         }
 
         .login-header p {
+            margin: 0;
+
             color: #6b7280;
 
             font-size: 14px;
 
-            margin: 0;
+            line-height: 1.6;
         }
 
-        /* Card */
+
+        /* =====================================================
+           LOGIN CARD
+        ===================================================== */
 
         .login-card {
+            padding: 31px;
+
             background: #ffffff;
 
             border: 1px solid #e5e7eb;
 
             border-radius: 18px;
 
-            padding: 32px;
-
             box-shadow:
-                0 10px 30px rgba(15, 23, 42, 0.06);
+                0 18px 45px rgba(15, 23, 42, 0.07),
+                0 2px 6px rgba(15, 23, 42, 0.025);
         }
 
-        /* Label */
+
+        /* =====================================================
+           LABEL
+        ===================================================== */
 
         .form-label {
+            display: block;
+
+            margin-bottom: 8px;
+
             color: #374151;
 
             font-size: 13px;
-            font-weight: 600;
 
-            margin-bottom: 8px;
+            font-weight: 650;
         }
 
-        /* Input */
+
+        /* =====================================================
+           INPUT
+        ===================================================== */
 
         .input-wrapper {
             position: relative;
@@ -299,50 +450,74 @@
             font-size: 14px;
 
             z-index: 2;
+
+            transition: color 0.2s ease;
         }
 
         .form-input {
             width: 100%;
+            height: 52px;
 
-            height: 50px;
-
-            padding: 0 45px;
-
-            background: #ffffff;
+            padding: 0 46px;
 
             border: 1px solid #d1d5db;
 
-            border-radius: 10px;
+            border-radius: 11px;
+
+            outline: none;
+
+            background: #ffffff;
 
             color: #111827;
 
             font-size: 14px;
 
-            outline: none;
-
-            transition: all 0.2s ease;
+            transition:
+                border-color 0.2s ease,
+                box-shadow 0.2s ease,
+                background 0.2s ease;
         }
 
-        .form-input::placeholder {
-            color: #9ca3af;
+        .form-input:hover {
+            border-color: #bfc4cc;
         }
 
         .form-input:focus {
             border-color: #dc2626;
 
+            background: #ffffff;
+
             box-shadow:
                 0 0 0 3px rgba(220, 38, 38, 0.08);
         }
 
-        /* Password button */
+        .form-input:focus + .password-toggle {
+            color: #dc2626;
+        }
+
+        .form-input::placeholder {
+            color: #a1a9b5;
+        }
+
+
+        /* =====================================================
+           PASSWORD TOGGLE
+        ===================================================== */
 
         .password-toggle {
             position: absolute;
 
-            right: 14px;
+            right: 13px;
             top: 50%;
 
             transform: translateY(-50%);
+
+            width: 32px;
+            height: 32px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
 
             border: none;
 
@@ -350,50 +525,77 @@
 
             color: #9ca3af;
 
+            border-radius: 7px;
+
             cursor: pointer;
 
-            padding: 5px;
+            transition:
+                background 0.2s ease,
+                color 0.2s ease;
         }
 
         .password-toggle:hover {
+            background: #fef2f2;
             color: #dc2626;
         }
 
-        /* Login button */
+
+        /* =====================================================
+           LOGIN BUTTON
+        ===================================================== */
 
         .btn-login {
             width: 100%;
+            height: 52px;
 
-            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
 
             border: none;
 
-            border-radius: 10px;
+            border-radius: 11px;
 
-            background: #b91c1c;
+            background:
+                linear-gradient(
+                    135deg,
+                    #dc2626,
+                    #b91c1c
+                );
 
-            color: white;
+            color: #ffffff;
 
             font-size: 14px;
+            font-weight: 650;
 
-            font-weight: 600;
-
-            transition: all 0.2s ease;
+            cursor: pointer;
 
             box-shadow:
-                0 5px 15px rgba(185, 28, 28, 0.18);
+                0 8px 20px rgba(185, 28, 28, 0.18);
+
+            transition:
+                transform 0.2s ease,
+                box-shadow 0.2s ease,
+                filter 0.2s ease;
         }
 
         .btn-login:hover {
-            background: #991b1b;
-
             transform: translateY(-1px);
 
+            filter: brightness(0.97);
+
             box-shadow:
-                0 8px 20px rgba(185, 28, 28, 0.25);
+                0 11px 25px rgba(185, 28, 28, 0.25);
         }
 
-        /* Security */
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+
+        /* =====================================================
+           SECURITY INFO
+        ===================================================== */
 
         .security-info {
             display: flex;
@@ -402,55 +604,33 @@
 
             gap: 7px;
 
+            margin-top: 19px;
+
             color: #9ca3af;
 
             font-size: 11px;
-
-            margin-top: 20px;
         }
 
         .security-info i {
             color: #16a34a;
         }
 
-        /* Back */
 
-        .back-home {
-            text-align: center;
-
-            margin-top: 25px;
-        }
-
-        .back-home a {
-            color: #6b7280;
-
-            text-decoration: none;
-
-            font-size: 13px;
-
-            transition: 0.2s;
-        }
-
-        .back-home a:hover {
-            color: #b91c1c;
-        }
-
-        /* Footer */
-
-        .form-footer {
-            text-align: center;
-
-            margin-top: 30px;
-
-            color: #9ca3af;
-
-            font-size: 11px;
-        }
-
-        /* Alert */
+        /* =====================================================
+           ALERT
+        ===================================================== */
 
         .custom-alert {
-            border: none;
+            display: flex;
+            align-items: flex-start;
+
+            gap: 3px;
+
+            padding: 12px 14px;
+
+            margin-bottom: 22px;
+
+            border: 1px solid #fecaca;
 
             border-radius: 10px;
 
@@ -458,69 +638,219 @@
 
             color: #991b1b;
 
-            font-size: 13px;
+            font-size: 12px;
 
-            padding: 12px 14px;
+            line-height: 1.5;
         }
 
-        /* =========================
-           RESPONSIVE
-        ========================= */
+
+        /* =====================================================
+           BACK HOME
+        ===================================================== */
+
+        .back-home {
+            text-align: center;
+
+            margin-top: 23px;
+        }
+
+        .back-home a {
+            display: inline-flex;
+            align-items: center;
+
+            color: #6b7280;
+
+            text-decoration: none;
+
+            font-size: 13px;
+
+            transition:
+                color 0.2s ease,
+                transform 0.2s ease;
+        }
+
+        .back-home a:hover {
+            color: #b91c1c;
+
+            transform: translateX(-2px);
+        }
+
+
+        /* =====================================================
+           FOOTER
+        ===================================================== */
+
+        .form-footer {
+            text-align: center;
+
+            margin-top: 28px;
+
+            color: #9ca3af;
+
+            font-size: 10.5px;
+
+            line-height: 1.8;
+        }
+
+        .form-footer strong {
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+
+        /* =====================================================
+           RESPONSIVE TABLET
+        ===================================================== */
+
+        @media (max-width: 1100px) {
+
+            .visual-content {
+                padding: 55px;
+            }
+
+            .form-side {
+                padding: 40px 35px;
+            }
+
+            .system-title {
+                font-size: 48px;
+            }
+
+            .system-info {
+                gap: 18px;
+            }
+        }
+
+
+        /* =====================================================
+           RESPONSIVE MOBILE
+        ===================================================== */
 
         @media (max-width: 992px) {
 
             .login-wrapper {
                 display: block;
-                overflow: auto;
+                min-height: 100vh;
             }
 
             .visual-side {
+                width: 100%;
+                min-height: 230px;
+
+                align-items: flex-end;
+            }
+
+            .visual-content {
+                padding: 32px 28px;
+            }
+
+            .government-brand {
+                margin-bottom: 20px;
+            }
+
+            .system-badge {
+                margin-bottom: 12px;
+            }
+
+            .system-title {
+                font-size: 34px;
+                letter-spacing: -1px;
+                margin-bottom: 12px;
+            }
+
+            .system-description,
+            .system-info {
                 display: none;
             }
 
             .form-side {
                 width: 100%;
-                min-height: 100vh;
+                min-height: calc(100vh - 230px);
 
-                padding: 30px 20px;
+                padding: 38px 22px;
+
+                align-items: flex-start;
             }
 
             .form-container {
-                max-width: 430px;
+                max-width: 450px;
             }
         }
 
+
+        /* =====================================================
+           SMALL MOBILE
+        ===================================================== */
+
         @media (max-width: 480px) {
 
-            .form-side {
-                padding: 25px 16px;
+            .visual-side {
+                min-height: 205px;
             }
 
-            .login-card {
-                padding: 24px 20px;
+            .visual-content {
+                padding: 25px 20px;
+            }
+
+            .government-brand {
+                margin-bottom: 18px;
+            }
+
+            .brand-icon {
+                width: 43px;
+                height: 43px;
+            }
+
+            .brand-text strong {
+                font-size: 13px;
+            }
+
+            .system-title {
+                font-size: 29px;
+            }
+
+            .form-side {
+                min-height: calc(100vh - 205px);
+
+                padding: 30px 16px;
             }
 
             .login-header h2 {
-                font-size: 25px;
+                font-size: 26px;
+            }
+
+            .login-card {
+                padding: 23px 19px;
+                border-radius: 15px;
+            }
+
+            .login-icon {
+                width: 52px;
+                height: 52px;
+            }
+
+            .form-input,
+            .btn-login {
+                height: 50px;
             }
         }
     </style>
 </head>
 
+
 <body>
 
     <div class="login-wrapper">
 
-        <!-- =========================
+        <!-- =====================================================
              LEFT SIDE
-        ========================= -->
+        ====================================================== -->
 
         <section class="visual-side">
 
             <div class="visual-content">
 
                 <!-- Government Brand -->
-
                 <div class="government-brand">
 
                     <div class="brand-icon">
@@ -536,7 +866,6 @@
 
 
                 <!-- System Badge -->
-
                 <div class="system-badge">
 
                     <i class="fas fa-fire-flame-curved"></i>
@@ -547,7 +876,6 @@
 
 
                 <!-- Title -->
-
                 <h1 class="system-title">
 
                     Sistem Informasi
@@ -559,19 +887,17 @@
 
 
                 <!-- Description -->
-
                 <p class="system-description">
 
-                    Platform pengelolaan dan pemantauan data Standar
-                    Pelayanan Minimal bidang kebakaran untuk mendukung
-                    penyajian informasi yang terintegrasi, akurat,
-                    dan akuntabel.
+                    Platform pengelolaan dan pemantauan data
+                    Standar Pelayanan Minimal bidang kebakaran
+                    untuk mendukung penyajian informasi yang
+                    terintegrasi, akurat, dan akuntabel.
 
                 </p>
 
 
                 <!-- Information -->
-
                 <div class="system-info">
 
                     <div class="info-item">
@@ -582,6 +908,7 @@
 
                     </div>
 
+
                     <div class="info-item">
 
                         <i class="fas fa-chart-line"></i>
@@ -589,6 +916,7 @@
                         <span>Monitoring Nasional</span>
 
                     </div>
+
 
                     <div class="info-item">
 
@@ -605,16 +933,16 @@
         </section>
 
 
-        <!-- =========================
+
+        <!-- =====================================================
              RIGHT SIDE
-        ========================= -->
+        ====================================================== -->
 
         <section class="form-side">
 
             <div class="form-container">
 
                 <!-- Login Header -->
-
                 <div class="login-header">
 
                     <div class="login-icon">
@@ -626,36 +954,59 @@
                     <h2>Login Operator</h2>
 
                     <p>
-                        Masukkan akun Anda untuk mengakses sistem.
+                        Masukkan akun operator untuk mengakses
+                        sistem informasi SPM Kebakaran.
                     </p>
 
                 </div>
 
 
-                <!-- Login Card -->
 
+                <!-- Login Card -->
                 <div class="login-card">
 
+                    {{-- Error Session --}}
                     @if(session('error'))
 
-                        <div class="custom-alert mb-4">
+                        <div class="custom-alert">
 
-                            <i class="fas fa-circle-exclamation me-2"></i>
+                            <i class="fas fa-circle-exclamation"></i>
 
-                            {{ session('error') }}
+                            <span>
+                                {{ session('error') }}
+                            </span>
 
                         </div>
 
                     @endif
 
 
-                    <form action="{{ url('/login') }}" method="POST">
+                    {{-- Validation Error --}}
+                    @if($errors->any())
+
+                        <div class="custom-alert">
+
+                            <i class="fas fa-circle-exclamation"></i>
+
+                            <div>
+                                {{ $errors->first() }}
+                            </div>
+
+                        </div>
+
+                    @endif
+
+
+                    <!-- Login Form -->
+                    <form
+                        action="{{ url('/login') }}"
+                        method="POST"
+                    >
 
                         @csrf
 
 
                         <!-- Email -->
-
                         <div class="mb-4">
 
                             <label class="form-label">
@@ -670,8 +1021,9 @@
                                     type="email"
                                     name="email"
                                     class="form-input"
-                                    placeholder="Masukkan email"
+                                    placeholder="Masukkan email operator"
                                     autocomplete="email"
+                                    value="{{ old('email') }}"
                                     required
                                     autofocus
                                 >
@@ -682,7 +1034,6 @@
 
 
                         <!-- Password -->
-
                         <div class="mb-4">
 
                             <label class="form-label">
@@ -709,7 +1060,12 @@
                                     onclick="togglePassword()"
                                     aria-label="Tampilkan password"
                                 >
-                                    <i class="fas fa-eye" id="passwordIcon"></i>
+
+                                    <i
+                                        class="fas fa-eye"
+                                        id="passwordIcon"
+                                    ></i>
+
                                 </button>
 
                             </div>
@@ -718,8 +1074,10 @@
 
 
                         <!-- Login Button -->
-
-                        <button type="submit" class="btn-login">
+                        <button
+                            type="submit"
+                            class="btn-login"
+                        >
 
                             <i class="fas fa-right-to-bracket me-2"></i>
 
@@ -731,12 +1089,13 @@
 
 
                     <!-- Security -->
-
                     <div class="security-info">
 
                         <i class="fas fa-circle-check"></i>
 
-                        <span>Koneksi dan akses sistem terlindungi</span>
+                        <span>
+                            Koneksi dan akses sistem terlindungi
+                        </span>
 
                     </div>
 
@@ -744,7 +1103,6 @@
 
 
                 <!-- Back -->
-
                 <div class="back-home">
 
                     <a href="{{ url('/') }}">
@@ -759,14 +1117,16 @@
 
 
                 <!-- Footer -->
-
                 <div class="form-footer">
 
-                    SPM Kebakaran &nbsp;•&nbsp; Kementerian Dalam Negeri
+                    <strong>SPM Kebakaran</strong>
+                    &nbsp;•&nbsp;
+                    Kementerian Dalam Negeri
 
                     <br>
 
-                    © {{ date('Y') }} Sistem Informasi SPM Kebakaran
+                    © {{ date('Y') }}
+                    Sistem Informasi SPM Kebakaran
 
                 </div>
 
@@ -777,20 +1137,28 @@
     </div>
 
 
-    <!-- Password Toggle -->
+
+    <!-- =====================================================
+         PASSWORD TOGGLE
+    ====================================================== -->
 
     <script>
 
         function togglePassword() {
 
-            const password = document.getElementById('password');
-            const icon = document.getElementById('passwordIcon');
+            const password =
+                document.getElementById('password');
+
+            const icon =
+                document.getElementById('passwordIcon');
+
 
             if (password.type === 'password') {
 
                 password.type = 'text';
 
                 icon.classList.remove('fa-eye');
+
                 icon.classList.add('fa-eye-slash');
 
             } else {
@@ -798,6 +1166,7 @@
                 password.type = 'password';
 
                 icon.classList.remove('fa-eye-slash');
+
                 icon.classList.add('fa-eye');
 
             }
@@ -807,7 +1176,10 @@
     </script>
 
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+    </script>
 
 </body>
 
