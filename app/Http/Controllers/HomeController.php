@@ -11,11 +11,11 @@ class HomeController extends Controller
 {
     public function index(Request $request)
     {
-        $availableYears = SpmData::query()->select('year')->distinct()->orderByDesc('year')->pluck('year');
+        $availableYears = SpmData::published()->select('year')->distinct()->orderByDesc('year')->pluck('year');
         $requestedYear = $request->integer('year');
         $year = $availableYears->contains($requestedYear) ? $requestedYear : $availableYears->first();
 
-        $spmQuery = SpmData::query()->when($year !== null, fn ($query) => $query->where('year', $year));
+        $spmQuery = SpmData::published()->when($year !== null, fn ($query) => $query->where('year', $year));
         $totalSpmData = (clone $spmQuery)->count();
         $totalRegencies = (clone $spmQuery)->distinct()->count('regency_id');
         $totalProvinces = (clone $spmQuery)->join('regencies', 'spm_data.regency_id', '=', 'regencies.id')->distinct()->count('regencies.province_id');

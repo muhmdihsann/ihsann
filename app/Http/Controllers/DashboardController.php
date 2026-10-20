@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ImportHistory;
 use App\Models\SpmData;
+use App\Services\PublicMapDataService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, PublicMapDataService $mapData)
     {
         $availableYears = SpmData::query()
             ->select('year')
@@ -50,40 +52,12 @@ class DashboardController extends Controller
             ->orderBy('provinces.name')
             ->get();
 
-        $mapData = [];
-        foreach ($provinsiData as $province) {
-            $average = (float) $province->rata_nilai;
-            $category = 'Belum Ada Data';
-            $color = '#cccccc';
-
-            if ($province->rata_nilai !== null) {
-                if ($average >= 85) {
-                    $category = 'Sangat Baik';
-                    $color = '#198754';
-                } elseif ($average >= 70) {
-                    $category = 'Baik';
-                    $color = '#0d6efd';
-                } elseif ($average >= 55) {
-                    $category = 'Cukup';
-                    $color = '#ffc107';
-                } else {
-                    $category = 'Kurang';
-                    $color = '#dc3545';
-                }
-            }
-
-            $mapData[strtoupper($province->provinsi)] = [
-                'id' => $province->provinsi_id,
-                'rata_nilai' => number_format($average, 2),
-                'kategori' => $category,
-                'warna' => $color,
-                'total_pos' => (int) ($province->total_pos ?? 0),
-                'total_sdm' => (int) ($province->total_sdm ?? 0),
-                'year' => $year,
-            ];
-        }
+        $mapAvailableYears = $mapData->availableYears();
+        $mapYear = $mapData->resolveYear($mapAvailableYears, $request->integer('map_year'));
+        $mapPayload = $mapData->data($mapYear);
 
         return view('dashboard.index', [
+            'importHistories' => ImportHistory::withCount('spmData')->latest()->get(),
             'totalProvinces' => $totalProvinces,
             'totalRegencies' => $totalRegencies,
             'totalSpmData' => $totalSpmData,
@@ -94,7 +68,9 @@ class DashboardController extends Controller
             'kategoriKurang' => $kategoriKurang,
             'labelProvinsi' => $provinsiData->pluck('provinsi'),
             'dataNilai' => $provinsiData->pluck('rata_nilai'),
-            'mapData' => $mapData,
+            'mapAvailableYears' => $mapAvailableYears,
+            'mapYear' => $mapYear,
+            'mapPayload' => $mapPayload,
             'availableYears' => $availableYears,
             'year' => $year,
         ]);

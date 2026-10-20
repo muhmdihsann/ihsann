@@ -4,33 +4,62 @@ namespace App\Http\Controllers;
 
 use App\Models\Province;
 use App\Models\Regency;
+use App\Models\SpmData;
+use App\Services\PublicMapDataService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class MapController extends Controller
 {
-    // 1. Menampilkan Halaman Peta Utama
-    public function index()
+    public function index(Request $request, PublicMapDataService $mapData): View
     {
-        return redirect()->to(route('home').'#statistik');
+        $availableYears = $mapData->availableYears();
+        $year = $mapData->resolveYear($availableYears, $request->integer('year'));
+        $mapPayload = $mapData->data($year);
+
+        return view('map', compact('availableYears', 'year', 'mapPayload'));
     }
 
-    // 2. Menampilkan Detail Provinsi (Drill-down)
-    public function show($id)
+    public function data(Request $request, PublicMapDataService $mapData): JsonResponse
     {
-        $provinsi = Province::findOrFail($id);
+        $availableYears = $mapData->availableYears();
+        $year = $mapData->resolveYear($availableYears, $request->integer('year'));
 
-        // Ambil data Kabupaten/Kota beserta nilai SPM-nya (menggunakan Left Join agar yang kosong tetap tampil)
-        $regencies = Regency::where('province_id', $id)
-            ->leftJoin('spm_data', 'regencies.id', '=', 'spm_data.regency_id')
-            ->select('regencies.*', 'spm_data.nilai_akhir', 'spm_data.kategori', 'spm_data.jml_pos', 'spm_data.total_sdm', 'spm_data.pr_redkar')
-            ->orderBy('regencies.name', 'asc')
-            ->get();
+        return response()->json($mapData->data($year));
+    }
 
-        // Hitung agregat untuk header halaman
+    public function show(Request $request, Province $province, PublicMapDataService $mapData): View
+    {
+        $availableYears = $mapData->availableYears();
+        $year = $mapData->resolveYear($availableYears, $request->integer('year'));
+        $spmData = SpmData::query()
+            ->published()
+            ->when($year !== null, fn ($query) => $query->where('year', $year))
+            ->whereHas('regency', fn ($query) => $query->where('province_id', $province->id))
+            ->get()
+            ->keyBy('regency_id');
+
+        $regencies = Regency::query()
+            ->whereBelongsTo($province)
+            ->orderBy('name')
+            ->get()
+            ->map(function (Regency $regency) use ($spmData, $mapData): Regency {
+                $data = $spmData->get($regency->id);
+                $regency->setAttribute('nilai_akhir', $data?->nilai_akhir);
+                $regency->setAttribute('kategori', $mapData->categoryFor($data?->nilai_akhir));
+                $regency->setAttribute('jml_pos', $data?->jml_pos);
+                $regency->setAttribute('total_sdm', $data?->total_sdm);
+                $regency->setAttribute('pr_redkar', $data?->pr_redkar);
+
+                return $regency;
+            });
+
         $totalRegencies = $regencies->count();
         $avgNilai = $regencies->avg('nilai_akhir');
         $totalPos = $regencies->sum('jml_pos');
         $totalSdm = $regencies->sum('total_sdm');
 
-        return view('provinsi', compact('provinsi', 'regencies', 'totalRegencies', 'avgNilai', 'totalPos', 'totalSdm'));
+        return view('provinsi', compact('province', 'regencies', 'totalRegencies', 'avgNilai', 'totalPos', 'totalSdm', 'year'));
     }
 }

@@ -38,7 +38,7 @@
                     </div>
                 @endif
 
-                <form action="{{ url('/admin/import/store') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('import.preview') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -57,7 +57,7 @@
                     </div>
                     <div class="mt-4">
                         <button type="submit" class="btn btn-primary px-4 py-2 fw-bold shadow-sm">
-                            <i class="fas fa-upload me-2"></i> Unggah & Perbarui Dashboard Publik
+                            <i class="fas fa-upload me-2"></i> Unggah & Preview Data
                         </button>
                     </div>
                 </form>

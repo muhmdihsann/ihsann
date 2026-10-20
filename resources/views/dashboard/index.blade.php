@@ -4,6 +4,27 @@
 @section('page_title', 'Dashboard Operator')
 
 @section('content')
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3"><h6 class="m-0 fw-bold text-primary">Dataset / Riwayat Import</h6></div>
+        <div class="card-body">
+            @forelse($importHistories as $importHistory)
+                <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom py-3 gap-2">
+                    <div><strong>Data SPM {{ $importHistory->year }}</strong><div class="text-muted small">{{ $importHistory->file_name }} · Jumlah data: {{ $importHistory->spm_data_count }}</div></div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge {{ $importHistory->status === 'published' ? 'bg-success' : 'bg-warning text-dark' }}">{{ strtoupper($importHistory->status) }}</span>
+                        @if($importHistory->status === 'draft')
+                            <form action="{{ route('import.publish', $importHistory) }}" method="POST">@csrf @method('PATCH')<button class="btn btn-sm btn-success">Publish</button></form>
+                        @else
+                            <form action="{{ route('import.draft', $importHistory) }}" method="POST">@csrf @method('PATCH')<button class="btn btn-sm btn-warning">Draft</button></form>
+                        @endif
+                        <form action="{{ route('import.destroy', $importHistory) }}" method="POST" onsubmit="return confirm('Hapus seluruh data import tahun {{ $importHistory->year }}? Seluruh data dari import ini akan dihapus dan harus import ulang.');">@csrf @method('DELETE')<button class="btn btn-sm btn-danger">Hapus</button></form>
+                    </div>
+                </div>
+            @empty
+                <p class="text-muted mb-0">Belum ada dataset yang diimpor.</p>
+            @endforelse
+        </div>
+    </div>
     <form action="{{ url('/admin/dashboard') }}" method="GET" class="row g-2 align-items-end mb-4">
         <div class="col-sm-4 col-md-3">
             <label for="dashboard-year" class="form-label fw-bold">Tahun Data</label>
@@ -128,20 +149,35 @@
 
     <div class="row mt-2">
         <div class="col-12 mb-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-map-marked-alt me-2"></i>Peta Persebaran SPM</h6>
+            <div class="card border-0 shadow-sm overflow-hidden">
+                <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-map-marked-alt me-2"></i>Peta Sebaran Indeks SPM Kebakaran</h6>
+                        <small class="text-muted">Distribusi indeks SPM per provinsi berdasarkan data yang dipublikasikan.</small>
+                    </div>
+                    <label class="small fw-semibold" for="dashboard-map-year">Tahun peta
+                        <select id="dashboard-map-year" class="form-select form-select-sm mt-1" {{ $mapAvailableYears->isEmpty() ? 'disabled' : '' }}>
+                            @forelse ($mapAvailableYears as $availableMapYear)
+                                <option value="{{ $availableMapYear }}" @selected($mapYear === $availableMapYear)>{{ $availableMapYear }}</option>
+                            @empty
+                                <option value="">Belum ada data</option>
+                            @endforelse
+                        </select>
+                    </label>
                 </div>
                 <div class="card-body">
+                    <div id="dashboard-map-breadcrumb" class="small text-muted mb-2">Indonesia</div>
+                    <div id="dashboard-map-state" class="alert alert-secondary py-2 small mb-2" role="status">Memuat data peta...</div>
                     <div id="dashboard-map" role="img" aria-label="Peta persebaran SPM berdasarkan provinsi"></div>
+                    <div id="dashboard-map-detail" class="mt-3" hidden></div>
                 </div>
             </div>
         </div>
     </div>
 
     <style>
-        #dashboard-map { height: 600px; width: 100%; border-radius: 10px; z-index: 1; }
-        .dashboard-map-legend { background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); line-height: 24px; color: #555; }
+        #dashboard-map { height: 640px; width: 100%; border-radius: 14px; z-index: 1; }
+        .dashboard-map-legend { background: rgba(255, 255, 255, .96); padding: 10px 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,.12); line-height: 24px; color: #555; }
         .dashboard-map-legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.8; }
     </style>
 
@@ -152,7 +188,17 @@
 
     <!-- Script Inisialisasi Grafik -->
     <script>
-        const mapDataDb = {{ Illuminate\Support\Js::from($mapData) }};
+        let mapPayload = {{ Illuminate\Support\Js::from($mapPayload) }};
+        let mapDataDb = {};
+        let mapDataByGeojsonCode = {};
+        const geoJsonCodeCounts = {};
+        const mapColors = {
+            'Sangat Baik': '#198754',
+            'Baik': '#0d6efd',
+            'Cukup': '#ffc107',
+            'Kurang': '#dc3545',
+            'Belum ada data': '#cccccc',
+        };
 
         // Data chart berasal dari query tahun aktif yang sama dengan peta.
         const labelsKategori = ['Sangat Baik', 'Baik', 'Cukup', 'Kurang'];
@@ -212,12 +258,61 @@
             return element;
         }
 
+        function mapKey(name) {
+            let normalized = (name || '').toLocaleUpperCase('id-ID').trim()
+                .replace(/^PROVINSI\s+/, '')
+                .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                .trim();
+
+            if (['DI YOGYAKARTA', 'DAERAH ISTIMEWA YOGYAKARTA'].includes(normalized)) return 'YOGYAKARTA';
+            if (['DKI JAKARTA', 'JAKARTA'].includes(normalized)) return 'JAKARTA';
+
+            return normalized.replace(/\s+/g, '');
+        }
+
+        function categoryForIndex(index) {
+            if (index === null || index === undefined) return 'Belum ada data';
+            if (index >= 85) return 'Sangat Baik';
+            if (index >= 70) return 'Baik';
+            if (index >= 55) return 'Cukup';
+            return 'Kurang';
+        }
+
+        function rebuildMapIndexes() {
+            mapDataDb = Object.fromEntries(mapPayload.provinces.map((province) => [province.map_key, province]));
+            mapDataByGeojsonCode = Object.fromEntries(mapPayload.provinces
+                .filter((province) => province.geojson_code && geoJsonCodeCounts[province.geojson_code] === 1)
+                .map((province) => [province.geojson_code, province]));
+        }
+
+        function provinceForFeature(feature) {
+            const code = String(feature.properties.KODE_PROV || '').trim();
+
+            return mapDataByGeojsonCode[code] || mapDataDb[mapKey(feature.properties.PROVINSI)] || null;
+        }
+
+        function showRegencyDetail(provinceData, regency) {
+            const detail = document.getElementById('dashboard-map-detail');
+            detail.hidden = false;
+            detail.replaceChildren();
+            addText(detail, 'h6', `${provinceData.province_name} / ${regency.regency_name}`, 'fw-bold mb-2');
+            addText(detail, 'div', `Indeks SPM: ${Number(regency.spm).toFixed(2)}`);
+            addText(detail, 'div', `Kategori: ${regency.category}`);
+            addText(detail, 'div', `Status: ${regency.validation_status}`);
+            addText(detail, 'div', `Tahun: ${mapPayload.year}`);
+        }
+
         function createProvincePopup(provinceName, provinceData) {
             const wrapper = document.createElement('div');
-            addText(wrapper, 'h6', provinceName.toUpperCase(), 'fw-bold mb-1 text-center');
+            addText(wrapper, 'h6', provinceData?.province_name || provinceName, 'fw-bold mb-1');
 
-            const badge = addText(wrapper, 'span', provinceData.kategori, 'badge');
-            badge.style.backgroundColor = provinceData.warna;
+            if (!provinceData || provinceData.spm === null) {
+                addText(wrapper, 'p', `Belum ada data yang dipublikasikan untuk tahun ${mapPayload.year ?? 'ini'}.`, 'mb-0 text-muted');
+                return wrapper;
+            }
+
+            const badge = addText(wrapper, 'span', provinceData.category, 'badge');
+            badge.style.backgroundColor = mapColors[provinceData.category];
 
             const divider = document.createElement('hr');
             divider.className = 'my-2';
@@ -225,31 +320,53 @@
 
             const list = document.createElement('ul');
             list.className = 'list-unstyled mb-0';
-            addText(list, 'li', `Rata-rata Nilai: ${provinceData.rata_nilai}`);
-            addText(list, 'li', `Total Pos: ${provinceData.total_pos}`);
-            addText(list, 'li', `Total SDM: ${provinceData.total_sdm}`);
+            addText(list, 'li', `Indeks SPM: ${Number(provinceData.spm).toFixed(2)}`);
+            addText(list, 'li', `Data Kabupaten/Kota: ${provinceData.regency_count}`);
             wrapper.appendChild(list);
 
-            const link = addText(wrapper, 'a', 'Lihat Kabupaten/Kota', 'btn btn-sm btn-primary w-100 mt-3');
-            link.href = '{{ url('/provinsi') }}/' + encodeURIComponent(String(provinceData.id));
+            if (provinceData.regencies.length > 0) {
+                const topTitle = addText(wrapper, 'strong', 'Top Kabupaten/Kota', 'd-block mt-2');
+                const regencyList = document.createElement('ol');
+                regencyList.className = 'mb-0 ps-3';
+                provinceData.regencies.slice(0, 5).forEach((regency) => {
+                    const item = document.createElement('li');
+                    const button = addText(item, 'button', `${regency.regency_name} — ${Number(regency.spm).toFixed(2)}`, 'btn btn-link btn-sm p-0 text-start');
+                    button.type = 'button';
+                    button.addEventListener('click', () => showRegencyDetail(provinceData, regency));
+                    regencyList.appendChild(item);
+                });
+                wrapper.appendChild(topTitle);
+                wrapper.appendChild(regencyList);
+            }
+
+            const link = addText(wrapper, 'a', 'Lihat semua kabupaten/kota', 'btn btn-sm btn-primary w-100 mt-3');
+            link.href = '{{ url('/provinsi') }}/' + encodeURIComponent(String(provinceData.id)) + '?year=' + encodeURIComponent(String(mapPayload.year));
 
             return wrapper;
         }
 
         function provinceColor(provinceName) {
-            const provinceData = mapDataDb[provinceName?.toUpperCase()];
-            return provinceData ? provinceData.warna : '#cccccc';
+            const provinceData = mapDataDb[mapKey(provinceName)];
+            return mapColors[categoryForIndex(provinceData?.spm)];
         }
 
         let dashboardGeoJsonLayer;
+        let dashboardGeoJsonData;
+        let selectedProvinceLayer;
         fetch('{{ url("geojson/indonesia-prov.geojson") }}')
             .then(response => response.json())
             .then(data => {
-                dashboardGeoJsonLayer = L.geoJson(data, {
+                dashboardGeoJsonData = data;
+                data.features.forEach((feature) => {
+                    const code = String(feature.properties.KODE_PROV || '').trim();
+                    geoJsonCodeCounts[code] = (geoJsonCodeCounts[code] || 0) + 1;
+                });
+                rebuildMapIndexes();
+                dashboardGeoJsonLayer = L.geoJson(dashboardGeoJsonData, {
                     style: feature => {
-                        const provinceName = feature.properties.Propinsi || feature.properties.name || feature.properties.provinsi || feature.properties.state;
+                        const provinceData = provinceForFeature(feature);
                         return {
-                            fillColor: provinceColor(provinceName),
+                            fillColor: mapColors[categoryForIndex(provinceData?.spm)],
                             weight: 2,
                             opacity: 1,
                             color: 'white',
@@ -258,30 +375,38 @@
                         };
                     },
                     onEachFeature: (feature, layer) => {
-                        const provinceName = feature.properties.Propinsi || feature.properties.name || feature.properties.provinsi || feature.properties.state || 'Tidak Diketahui';
-                        const provinceData = mapDataDb[provinceName.toUpperCase()];
-
-                        if (provinceData) {
-                            layer.bindPopup(createProvincePopup(provinceName, provinceData));
-                        } else {
-                            const emptyPopup = document.createElement('div');
-                            addText(emptyPopup, 'strong', provinceName);
-                            addText(emptyPopup, 'br', '');
-                            addText(emptyPopup, 'span', 'Belum ada data.');
-                            layer.bindPopup(emptyPopup);
-                        }
+                        const provinceName = feature.properties.PROVINSI;
+                        const provinceData = provinceForFeature(feature);
+                        layer.bindPopup(createProvincePopup(provinceName, provinceData));
+                        layer.bindTooltip(`${provinceName}<br>${provinceData?.spm === null || !provinceData ? 'Belum ada data' : `${Number(provinceData.spm).toFixed(2)} · ${provinceData.category}`}`, { sticky: true });
 
                         layer.on({
                             mouseover: event => {
                                 event.target.setStyle({ weight: 4, color: '#333', dashArray: '', fillOpacity: 0.9 });
                                 event.target.bringToFront();
                             },
-                            mouseout: event => dashboardGeoJsonLayer.resetStyle(event.target)
+                            mouseout: event => dashboardGeoJsonLayer.resetStyle(event.target),
+                            click: event => {
+                                if (selectedProvinceLayer) dashboardGeoJsonLayer.resetStyle(selectedProvinceLayer);
+                                selectedProvinceLayer = event.target;
+                                selectedProvinceLayer.setStyle({ weight: 4, color: '#1f2937', dashArray: '', fillOpacity: .9 });
+                                dashboardMap.fitBounds(selectedProvinceLayer.getBounds(), { padding: [24, 24] });
+                                document.getElementById('dashboard-map-breadcrumb').textContent = `Indonesia / ${provinceName}`;
+                            }
                         });
                     }
                 }).addTo(dashboardMap);
+                const mapState = document.getElementById('dashboard-map-state');
+                mapState.textContent = mapPayload.year === null
+                    ? 'Belum ada data dipublikasikan untuk tahun ini.'
+                    : `Menampilkan data published tahun ${mapPayload.year}.`;
+                mapState.className = mapPayload.year === null ? 'alert alert-secondary py-2 small mb-2' : 'alert alert-success py-2 small mb-2';
             })
-            .catch(error => console.error('Error loading geojson:', error));
+            .catch(error => {
+                document.getElementById('dashboard-map-state').textContent = 'Gagal memuat data peta.';
+                document.getElementById('dashboard-map-state').className = 'alert alert-danger py-2 small mb-2';
+                console.error('Error loading geojson:', error);
+            });
 
         const legend = L.control({ position: 'bottomright' });
         legend.onAdd = function () {
@@ -305,5 +430,57 @@
             return div;
         };
         legend.addTo(dashboardMap);
+
+        document.getElementById('dashboard-map-year').addEventListener('change', async (event) => {
+            if (!dashboardGeoJsonData) return;
+
+            const mapState = document.getElementById('dashboard-map-state');
+            mapState.textContent = 'Memuat data peta...';
+            mapState.className = 'alert alert-secondary py-2 small mb-2';
+
+            try {
+                const response = await fetch(`{{ route('peta.data') }}?year=${encodeURIComponent(event.target.value)}`, {
+                    headers: { Accept: 'application/json' },
+                });
+                if (!response.ok) throw new Error('Map data request failed.');
+
+                mapPayload = await response.json();
+                rebuildMapIndexes();
+                dashboardMap.removeLayer(dashboardGeoJsonLayer);
+                dashboardGeoJsonLayer = L.geoJson(dashboardGeoJsonData, {
+                    style: feature => ({
+                        fillColor: mapColors[categoryForIndex(provinceForFeature(feature)?.spm)],
+                        weight: 2, opacity: 1, color: 'white', dashArray: '3', fillOpacity: .7,
+                    }),
+                    onEachFeature: (feature, layer) => {
+                        const provinceName = feature.properties.PROVINSI;
+                        const provinceData = provinceForFeature(feature);
+                        layer.bindPopup(createProvincePopup(provinceName, provinceData));
+                        layer.bindTooltip(`${provinceName}<br>${provinceData?.spm === null || !provinceData ? 'Belum ada data' : `${Number(provinceData.spm).toFixed(2)} · ${provinceData.category}`}`, { sticky: true });
+                        layer.on({
+                            mouseover: mapEvent => {
+                                mapEvent.target.setStyle({ weight: 4, color: '#333', dashArray: '', fillOpacity: .9 });
+                                mapEvent.target.bringToFront();
+                            },
+                            mouseout: mapEvent => dashboardGeoJsonLayer.resetStyle(mapEvent.target),
+                            click: mapEvent => {
+                                if (selectedProvinceLayer) dashboardGeoJsonLayer.resetStyle(selectedProvinceLayer);
+                                selectedProvinceLayer = mapEvent.target;
+                                selectedProvinceLayer.setStyle({ weight: 4, color: '#1f2937', dashArray: '', fillOpacity: .9 });
+                                dashboardMap.fitBounds(selectedProvinceLayer.getBounds(), { padding: [24, 24] });
+                                document.getElementById('dashboard-map-breadcrumb').textContent = `Indonesia / ${provinceName}`;
+                            },
+                        });
+                    },
+                }).addTo(dashboardMap);
+                document.getElementById('dashboard-map-breadcrumb').textContent = 'Indonesia';
+                mapState.textContent = mapPayload.year === null ? 'Belum ada data dipublikasikan untuk tahun ini.' : `Menampilkan data published tahun ${mapPayload.year}.`;
+                mapState.className = mapPayload.year === null ? 'alert alert-secondary py-2 small mb-2' : 'alert alert-success py-2 small mb-2';
+            } catch (error) {
+                mapState.textContent = 'Gagal memuat data peta.';
+                mapState.className = 'alert alert-danger py-2 small mb-2';
+                console.error('Error loading map data:', error);
+            }
+        });
     </script>
 @endsection

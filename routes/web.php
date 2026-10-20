@@ -1,19 +1,20 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ImportController;
-use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\DatasetImportController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MapController;
-use App\Http\Controllers\SpmDataController;
 use App\Http\Controllers\ProvinceController;
-use App\Http\Controllers\ExportController;
+use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\SpmDataController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/peta', [MapController::class, 'index'])->name('peta');
-Route::get('/provinsi/{id}', [MapController::class, 'show'])->name('provinsi.detail');
+Route::get('/peta/data', [MapController::class, 'data'])->name('peta.data');
+Route::get('/provinsi/{province}', [MapController::class, 'show'])->name('provinsi.detail');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'index'])->name('login');
@@ -32,8 +33,12 @@ Route::middleware('auth')->prefix('admin')->group(function () {
 
     Route::get('/provinces', [ProvinceController::class, 'index'])->name('provinces.index');
 
-    Route::get('/import', [ImportController::class, 'index'])->name('import.index');
-    Route::post('/import/store', [ImportController::class, 'store'])->name('import.store');
+    Route::get('/import', [DatasetImportController::class, 'index'])->name('import.index');
+    Route::post('/import/preview', [DatasetImportController::class, 'preview'])->name('import.preview');
+    Route::post('/import', [DatasetImportController::class, 'store'])->name('import.store');
+    Route::patch('/import/{importHistory}/publish', [DatasetImportController::class, 'publish'])->name('import.publish');
+    Route::patch('/import/{importHistory}/draft', [DatasetImportController::class, 'draft'])->name('import.draft');
+    Route::delete('/import/{importHistory}', [DatasetImportController::class, 'destroy'])->name('import.destroy');
     Route::post('/reconciliation/preview', [ReconciliationController::class, 'preview'])->name('reconciliation.preview');
 
     Route::get('/export', [ExportController::class, 'index'])->name('export.index');

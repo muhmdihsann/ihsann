@@ -10,27 +10,27 @@
 
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <h6 class="m-0 font-weight-bold text-primary">Ringkasan Validasi (Tahun: {{ $year }})</h6>
+        <h6 class="m-0 font-weight-bold text-primary">{{ $filename }} — Ringkasan Validasi (Tahun: {{ $year }})</h6>
 
         <!-- Form Konfirmasi Import -->
-        <form action="{{ url('/admin/import/store') }}" method="POST" class="d-inline">
+        <form action="{{ route('import.store') }}" method="POST" class="d-inline">
             @csrf
-            <input type="hidden" name="file_name" value="{{ $fileName }}">
-            <input type="hidden" name="year" value="{{ $year }}">
             <button type="submit" class="btn btn-success btn-sm shadow-sm" {{ count($invalidData) > 0 ? 'disabled' : '' }}>
-                <i class="fas fa-save me-1"></i> Konfirmasi & Simpan ke Database
+                <i class="fas fa-save me-1"></i> Import Data
             </button>
         </form>
+        <a href="{{ route('import.index') }}" class="btn btn-outline-secondary btn-sm">Batal</a>
     </div>
     <div class="card-body">
         <div class="row text-center mb-3">
-            <div class="col-md-6">
+            <div class="col-md-4"><div class="p-3 bg-light rounded border"><h5>{{ $totalRows }}</h5><small>Total Baris Data</small></div></div>
+            <div class="col-md-4">
                 <div class="p-3 bg-light rounded border">
                     <h5 class="text-success">{{ count($validData) }}</h5>
                     <small>Baris Data Valid</small>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="p-3 bg-light rounded border">
                     <h5 class="text-danger">{{ count($invalidData) }}</h5>
                     <small>Baris Data Error</small>
@@ -47,6 +47,7 @@
                             <th>Baris Excel</th>
                             <th>Provinsi</th>
                             <th>Kabupaten/Kota</th>
+                            <th>Field</th>
                             <th>Alasan Error</th>
                         </tr>
                     </thead>
@@ -54,9 +55,10 @@
                         @foreach($invalidData as $error)
                         <tr>
                             <td>{{ $error['row'] }}</td>
-                            <td>{{ $error['provinsi'] }}</td>
-                            <td>{{ $error['kabupaten'] }}</td>
-                            <td>{{ $error['alasan'] }}</td>
+                            <td>{{ $error['province'] }}</td>
+                            <td>{{ $error['regency'] }}</td>
+                            <td>{{ $error['field'] }}</td>
+                            <td>{{ $error['message'] }}</td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -81,12 +83,12 @@
                     <!-- Menampilkan maksimal 10 data saja sebagai preview agar tidak berat -->
                     @foreach(array_slice($validData, 0, 10) as $row)
                     <tr>
-                        <td>{{ $row[1] }}</td> <!-- Kolom Provinsi -->
-                        <td>{{ $row[2] }}</td> <!-- Kolom Kab/Kota -->
-                        <td>{{ $row[6] }}</td> <!-- Jumlah Kecamatan -->
-                        <td>{{ $row[7] }}</td> <!-- Jumlah Pos -->
-                        <td class="fw-bold">{{ $row[21] }}</td> <!-- Nilai Akhir -->
-                        <td>{{ $row[22] }}</td> <!-- Kategori -->
+                        <td>{{ $row['province'] }}</td>
+                        <td>{{ $row['regency'] }}</td>
+                        <td>{{ $row['values']['jml_kecamatan'] }}</td>
+                        <td>{{ $row['values']['jml_pos'] }}</td>
+                        <td class="fw-bold">{{ $row['values']['nilai_akhir'] }}</td>
+                        <td>{{ $row['values']['kategori'] ?? '-' }}</td>
                     </tr>
                     @endforeach
                 </tbody>

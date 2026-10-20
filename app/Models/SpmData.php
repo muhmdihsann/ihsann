@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SpmData extends Model
 {
@@ -18,7 +20,7 @@ class SpmData extends Model
     /**
      * Relasi: Data SPM ini milik satu Kabupaten/Kota
      */
-    public function regency()
+    public function regency(): BelongsTo
     {
         return $this->belongsTo(Regency::class);
     }
@@ -26,8 +28,15 @@ class SpmData extends Model
     /**
      * Relasi: Data SPM ini berasal dari satu riwayat Import (bisa null jika input manual)
      */
-    public function importHistory()
+    public function importHistory(): BelongsTo
     {
         return $this->belongsTo(ImportHistory::class);
+    }
+
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query->whereHas('importHistory', function (Builder $query): void {
+            $query->where('status', ImportHistory::Published);
+        });
     }
 }

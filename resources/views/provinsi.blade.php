@@ -4,10 +4,10 @@
 <div class="container my-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold mb-0">Provinsi {{ $provinsi->name }}</h2>
+            <h2 class="fw-bold mb-0">Provinsi {{ $province->name }}</h2>
             <p class="text-muted">Detail Penyelenggaraan SPM Sub Urusan Kebakaran Tingkat Kabupaten/Kota</p>
         </div>
-        <a href="{{ url('/peta') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i> Kembali ke Peta</a>
+        <a href="{{ route('peta', ['year' => $year]) }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i> Kembali ke Peta</a>
     </div>
 
     <!-- Ringkasan Provinsi -->
