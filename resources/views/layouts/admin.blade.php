@@ -128,7 +128,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ request()->is('admin/regencies*') ? 'active' : '' }}" href="{{ url('/admin/regencies') }}">
+                        <a class="nav-link {{ request()->is('admin/regencies*') ? 'active' : '' }}" href="{{ route('regencies.index') }}">
                             <i class="fas fa-city me-2"></i> Data Kab/Kota
                         </a>
                     </li>
@@ -139,8 +139,8 @@
                 </h6>
                 <ul class="nav flex-column mb-4">
                     <li class="nav-item">
-                        <a class="nav-link {{ request()->is('admin/spm*') ? 'active' : '' }}" href="{{ url('/admin/spm') }}">
-                            <i class="fas fa-database me-2"></i> Data SPM
+                        <a class="nav-link {{ request()->is('admin/news*') ? 'active' : '' }}" href="{{ url('/admin/news') }}">
+                            <i class="fas fa-newspaper me-2"></i> Upload Berita
                         </a>
                     </li>
                     <li class="nav-item">

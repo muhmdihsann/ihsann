@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'nasa' => [
+        'firms' => [
+            'map_key' => env('NASA_FIRMS_MAP_KEY'),
+            'source' => env('NASA_FIRMS_SOURCE', 'VIIRS_NOAA21_NRT'),
+        ],
+    ],
+
 ];

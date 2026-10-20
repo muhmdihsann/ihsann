@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Province extends Model
 {
@@ -14,7 +16,7 @@ class Province extends Model
     /**
      * Relasi: Satu Provinsi memiliki banyak Kabupaten/Kota
      */
-    public function regencies()
+    public function regencies(): HasMany
     {
         return $this->hasMany(Regency::class);
     }
@@ -22,7 +24,7 @@ class Province extends Model
     /**
      * Relasi HasManyThrough: Mendapatkan semua data SPM melalui Kabupaten/Kota
      */
-    public function spmData()
+    public function spmData(): HasManyThrough
     {
         return $this->hasManyThrough(SpmData::class, Regency::class);
     }

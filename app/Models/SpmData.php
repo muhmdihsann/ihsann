@@ -17,6 +17,10 @@ class SpmData extends Model
 
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'is_published' => 'boolean',
+    ];
+
     /**
      * Relasi: Data SPM ini milik satu Kabupaten/Kota
      */
@@ -35,8 +39,9 @@ class SpmData extends Model
 
     public function scopePublished(Builder $query): Builder
     {
-        return $query->whereHas('importHistory', function (Builder $query): void {
-            $query->where('status', ImportHistory::Published);
-        });
+        return $query->where('spm_data.is_published', true)
+            ->whereHas('importHistory', function (Builder $query): void {
+                $query->where('status', ImportHistory::Published);
+            });
     }
 }

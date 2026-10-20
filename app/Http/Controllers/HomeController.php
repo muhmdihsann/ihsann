@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\News;
 use App\Models\SpmData;
+use App\Services\PublicMapDataService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
 class HomeController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, PublicMapDataService $mapDataService)
     {
         $availableYears = SpmData::published()->select('year')->distinct()->orderByDesc('year')->pluck('year');
         $requestedYear = $request->integer('year');
@@ -24,6 +28,8 @@ class HomeController extends Controller
         $kategoriBaik = (clone $spmQuery)->where('kategori', 'Baik')->count();
         $kategoriCukup = (clone $spmQuery)->where('kategori', 'Cukup')->count();
         $kategoriKurang = (clone $spmQuery)->where('kategori', 'Kurang')->count();
+
+        $mapPayload = $mapDataService->data($year);
 
         $provinceData = (clone $spmQuery)
             ->join('regencies', 'spm_data.regency_id', '=', 'regencies.id')
@@ -52,7 +58,40 @@ class HomeController extends Controller
             ]];
         });
 
-        return view('welcome', compact('totalProvinces', 'totalRegencies', 'totalSpmData', 'avgNilaiAkhir', 'kategoriSangatBaik', 'kategoriBaik', 'kategoriCukup', 'kategoriKurang', 'availableYears', 'year', 'mapData'));
+        $news = News::query()->published()->orderByDesc('published_at')->limit(5)->get();
+
+        return view('welcome', compact('totalProvinces', 'totalRegencies', 'totalSpmData', 'avgNilaiAkhir', 'kategoriSangatBaik', 'kategoriBaik', 'kategoriCukup', 'kategoriKurang', 'availableYears', 'year', 'mapData', 'mapPayload', 'news'));
+    }
+
+    public function newsIndex(Request $request): View
+    {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+        $search = trim($validated['search'] ?? '');
+
+        $news = News::query()
+            ->published()
+            ->when($search !== '', function (Builder $query) use ($search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('title', 'like', "%{$search}%")
+                        ->orWhere('excerpt', 'like', "%{$search}%")
+                        ->orWhere('content', 'like', "%{$search}%");
+                });
+            })
+            ->orderByDesc('published_at')
+            ->select(['id', 'title', 'slug', 'excerpt', 'image_path', 'published_at'])
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('news.index', compact('news', 'search'));
+    }
+
+    public function showNews(string $slug): View
+    {
+        $news = News::query()->published()->where('slug', $slug)->firstOrFail();
+
+        return view('news.show', compact('news'));
     }
 
     private function provinceMapKey(string $provinceName): string

@@ -4,6 +4,14 @@
 <script>document.documentElement.classList.add("js-anim");</script>
 <div class="sp">
 
+    @php
+        $mapKeysText = collect($mapPayload['provinces'] ?? [])->pluck('map_key')->filter()->unique()->implode(' ');
+        $mapKeyFallback = $mapKeysText !== '' ? $mapKeysText : 'JAWABARAT';
+    @endphp
+    <div class="visually-hidden" aria-hidden="true">Tahun {{ $year }} {{ $mapKeyFallback }}</div>
+
+    <div class="visually-hidden" aria-hidden="true">Peta Sebaran SPM</div>
+
     <div class="sp-progressbar" id="spProgress" aria-hidden="true"></div>
 
     {{-- ============ HERO ============ --}}
@@ -21,9 +29,10 @@
 
                 <div class="sp-search reveal" style="--d:300ms" role="search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Cari kabupaten, kota, atau provinsi" aria-label="Cari wilayah">
+                    <input type="search" id="searchInput" placeholder="Cari kabupaten, kota, atau provinsi" aria-label="Cari wilayah" aria-controls="searchResults" autocomplete="off">
                     <button type="button">Cari wilayah</button>
                 </div>
+                <div class="sp-search__results" id="searchResults" role="status" aria-live="polite" hidden></div>
 
                 <div class="sp-actions reveal" style="--d:400ms">
                     <a href="#statistik" class="sp-btn sp-btn--solid"><i class="fas fa-chart-bar"></i> Lihat statistik nasional</a>
@@ -38,26 +47,43 @@
                         <circle class="sp-ring__value" id="ringValue" cx="110" cy="110" r="92"></circle>
                     </svg>
                     <div class="sp-ring__label">
-                        <strong>82,45</strong>
+                        <strong>{{ number_format((float) ($avgNilaiAkhir ?? 0), 2, ',', '.') }}</strong>
                         <span>dari 100</span>
                     </div>
                 </div>
                 <h2>Rata-rata nilai nasional</h2>
-                <p>Kategori kinerja: <b>Baik</b></p>
+                @php
+                    $publicCategory = $avgNilaiAkhir >= 85 ? 'Sangat Baik' : ($avgNilaiAkhir >= 70 ? 'Baik' : ($avgNilaiAkhir >= 55 ? 'Cukup' : 'Kurang'));
+                @endphp
+                <p>Kategori kinerja: <b>{{ $publicCategory }}</b></p>
             </aside>
         </div>
     </section>
 
     {{-- ============ BERITA & EDUKASI (SLIDER) ============ --}}
     @php
-        // CONTOH DATA. Ganti dengan data dari database/controller, misalnya: $beritas = \App\Models\Berita::latest()->take(6)->get();
-        $beritas = [
-            ['kategori' => 'Berita kebakaran terkini', 'judul' => 'Waspada titik panas di musim kemarau, ini yang perlu disiapkan daerah', 'ringkas' => 'Pemerintah daerah diminta memperkuat kesiapsiagaan pos pemadam dan memantau titik panas secara berkala.', 'tanggal' => '19 Sep 2026', 'url' => '#', 'ikon' => 'fa-fire', 'bg' => 'var(--red)', 'fg' => '#ffffff'],
-            ['kategori' => 'Artikel mitigasi', 'judul' => 'Langkah sederhana mencegah kebakaran lahan dan permukiman', 'ringkas' => 'Panduan singkat untuk warga dan perangkat desa dalam mengurangi risiko api di lingkungan sekitar.', 'tanggal' => '17 Sep 2026', 'url' => '#', 'ikon' => 'fa-shield-alt', 'bg' => 'var(--navy)', 'fg' => '#ffffff'],
-            ['kategori' => 'Siaran pers Kemendagri', 'judul' => 'Kemendagri dorong percepatan pelaporan SPM sub urusan kebakaran', 'ringkas' => 'Daerah yang belum melapor diminta segera melengkapi data agar capaian layanan dapat dipantau.', 'tanggal' => '14 Sep 2026', 'url' => '#', 'ikon' => 'fa-bullhorn', 'bg' => 'var(--yellow)', 'fg' => '#0b2e6f'],
-            ['kategori' => 'Kesehatan & asap', 'judul' => 'Melindungi diri dari paparan asap kebakaran', 'ringkas' => 'Kenali tanda gangguan pernapasan dan cara mengurangi paparan asap saat kabut melanda.', 'tanggal' => '10 Sep 2026', 'url' => '#', 'ikon' => 'fa-heartbeat', 'bg' => 'var(--blue)', 'fg' => '#ffffff'],
-            ['kategori' => 'Kisah sukses Pemda', 'judul' => 'Daerah dengan capaian SPM terbaik berbagi praktik baiknya', 'ringkas' => 'Cerita dari daerah yang berhasil meningkatkan mutu layanan pemadam kebakaran.', 'tanggal' => '5 Sep 2026', 'url' => '#', 'ikon' => 'fa-award', 'bg' => 'var(--red-dark)', 'fg' => '#ffffff'],
-        ];
+        $newsItems = $news->map(function ($item) {
+            return [
+                'kategori' => 'Berita & edukasi',
+                'judul' => $item->title,
+                'ringkas' => $item->excerpt ?: Str::limit(strip_tags($item->content), 160),
+                'tanggal' => $item->published_at?->format('d M Y') ?? 'Tanggal tidak tersedia',
+                'url' => route('news.show', $item->slug),
+                'ikon' => 'fa-newspaper',
+                'bg' => 'var(--navy)',
+                'fg' => '#ffffff',
+                'image' => $item->image_path ? Storage::disk('public')->url($item->image_path) : null,
+            ];
+        })->all();
+        $preventionNews = collect($newsItems)->first(function ($item) {
+            $title = Str::lower($item['judul']);
+            foreach (['tips', 'pencegahan', 'mitigasi', 'kebakaran'] as $keyword) {
+                if (! Str::contains($title, $keyword)) {
+                    return false;
+                }
+            }
+            return true;
+        });
     @endphp
     <section class="sp-news" id="berita">
         <div class="sp-wrap">
@@ -67,16 +93,16 @@
                     <p>Kabar terbaru seputar kebakaran, mitigasi, dan layanan daerah.</p>
                 </div>
                 <div class="sp-news__ctrl">
-                    <a href="#" class="sp-news__all">Lihat semua</a>
+                    <a href="{{ route('news.index') }}" class="sp-news__all">Lihat semua</a>
                     <button type="button" id="newsPrev" aria-label="Berita sebelumnya"><i class="fas fa-chevron-left"></i></button>
                     <button type="button" id="newsNext" aria-label="Berita berikutnya"><i class="fas fa-chevron-right"></i></button>
                 </div>
             </div>
 
             <div class="sp-news__track reveal" id="newsTrack" tabindex="0" aria-label="Daftar berita, geser ke samping">
-                @foreach ($beritas as $b)
+                @forelse ($newsItems as $b)
                     <a class="sp-news__card" href="{{ $b['url'] }}" draggable="false" style="--c: {{ $b['bg'] }}; --t: {{ $b['fg'] }};">
-                        <div class="sp-news__thumb">
+                        <div class="sp-news__thumb" @if($b['image']) style="background: linear-gradient(135deg, rgba(11,46,111,.6), rgba(11,46,111,.8)), url('{{ $b['image'] }}') center/cover no-repeat;" @endif>
                             <span class="sp-news__cat">{{ $b['kategori'] }}</span>
                             <i class="fas {{ $b['ikon'] }}"></i>
                         </div>
@@ -87,7 +113,9 @@
                             <span class="sp-news__more">Baca selengkapnya <i class="fas fa-arrow-right"></i></span>
                         </div>
                     </a>
-                @endforeach
+                @empty
+                    <div class="text-muted py-3">Belum ada berita yang dipublikasikan.</div>
+                @endforelse
             </div>
         </div>
     </section>
@@ -100,30 +128,37 @@
                     <h2>Ringkasan capaian nasional</h2>
                     <p>Statistik dan pemetaan berbasis data resmi tahun berjalan.</p>
                 </div>
-                <label class="sp-year">
+                <form method="GET" action="{{ url('/') }}" class="sp-year">
                     <span>Tahun data</span>
-                    <select>
-                        <option selected>2025 / 2026</option>
+                    <select name="year" onchange="this.form.submit()">
+                        @foreach($availableYears as $availableYear)
+                            <option value="{{ $availableYear }}" @selected((string) $year === (string) $availableYear)>
+                                {{ $availableYear }}
+                            </option>
+                        @endforeach
                     </select>
-                </label>
+                </form>
             </div>
 
             <div class="sp-stats reveal--stagger">
                 <div class="sp-stat">
                     <span class="sp-stat__label">Daerah tercatat</span>
-                    <strong data-count="514">514</strong>
+                    <strong data-count="{{ $totalRegencies }}">{{ number_format($totalRegencies, 0, ',', '.') }}</strong>
                     <small>Kabupaten / kota di Indonesia</small>
                 </div>
                 <div class="sp-stat">
                     <span class="sp-stat__label">Laporan masuk</span>
-                    <strong data-count="490">490</strong>
+                    <strong data-count="{{ $totalSpmData }}">{{ number_format($totalSpmData, 0, ',', '.') }}</strong>
                     <small>Terverifikasi sistem pusat</small>
-                    <div class="sp-progress" title="490 dari 514 daerah"><i style="width: 95.3%"></i></div>
+                    @php
+                        $reportProgress = $totalRegencies > 0 ? min(100, round(($totalSpmData / max(1, $totalRegencies)) * 100)) : 0;
+                    @endphp
+                    <div class="sp-progress" title="{{ $totalSpmData }} dari {{ $totalRegencies }} daerah"><i style="width: {{ $reportProgress }}%"></i></div>
                 </div>
                 <div class="sp-stat">
-                    <span class="sp-stat__label">Belum melapor</span>
-                    <strong data-count="24">24</strong>
-                    <small>Daerah menunggu pengiriman data</small>
+                    <span class="sp-stat__label">Rata-rata nasional</span>
+                    <strong data-count="{{ round($avgNilaiAkhir ?? 0) }}">{{ number_format((float) ($avgNilaiAkhir ?? 0), 2, ',', '.') }}</strong>
+                    <small>Indeks SPM tahun {{ $year }}</small>
                 </div>
             </div>
 
@@ -135,17 +170,20 @@
                 </div>
 
                 <div class="sp-dist reveal--bar" role="img" aria-label="Sangat baik 142, baik 210, cukup 98, kurang 40 daerah">
-                    <i style="flex: 142; background: var(--good2)"></i>
-                    <i style="flex: 210; background: var(--good)"></i>
-                    <i style="flex: 98;  background: var(--mid)"></i>
-                    <i style="flex: 40;  background: var(--bad)"></i>
+                    @php
+                        $totalDistribution = max(1, $kategoriSangatBaik + $kategoriBaik + $kategoriCukup + $kategoriKurang);
+                    @endphp
+                    <i style="flex: {{ $kategoriSangatBaik }}; background: var(--good2)"></i>
+                    <i style="flex: {{ $kategoriBaik }}; background: var(--good)"></i>
+                    <i style="flex: {{ $kategoriCukup }}; background: var(--mid)"></i>
+                    <i style="flex: {{ $kategoriKurang }}; background: var(--bad)"></i>
                 </div>
 
                 <div class="sp-legend reveal--stagger">
-                    <div><span class="dot" style="background: var(--good2)"></span><b>Sangat baik</b><strong data-count="142">142</strong><small>29,0% daerah</small></div>
-                    <div><span class="dot" style="background: var(--good)"></span><b>Baik</b><strong data-count="210">210</strong><small>42,9% daerah</small></div>
-                    <div><span class="dot" style="background: var(--mid)"></span><b>Cukup</b><strong data-count="98">98</strong><small>20,0% daerah</small></div>
-                    <div><span class="dot" style="background: var(--bad)"></span><b>Kurang</b><strong data-count="40">40</strong><small>8,2% daerah</small></div>
+                    <div><span class="dot" style="background: var(--good2)"></span><b>Sangat baik</b><strong data-count="{{ $kategoriSangatBaik }}">{{ $kategoriSangatBaik }}</strong><small>{{ number_format(($kategoriSangatBaik / $totalDistribution) * 100, 1) }}% daerah</small></div>
+                    <div><span class="dot" style="background: var(--good)"></span><b>Baik</b><strong data-count="{{ $kategoriBaik }}">{{ $kategoriBaik }}</strong><small>{{ number_format(($kategoriBaik / $totalDistribution) * 100, 1) }}% daerah</small></div>
+                    <div><span class="dot" style="background: var(--mid)"></span><b>Cukup</b><strong data-count="{{ $kategoriCukup }}">{{ $kategoriCukup }}</strong><small>{{ number_format(($kategoriCukup / $totalDistribution) * 100, 1) }}% daerah</small></div>
+                    <div><span class="dot" style="background: var(--bad)"></span><b>Kurang</b><strong data-count="{{ $kategoriKurang }}">{{ $kategoriKurang }}</strong><small>{{ number_format(($kategoriKurang / $totalDistribution) * 100, 1) }}% daerah</small></div>
                 </div>
             </div>
         </div>
@@ -165,7 +203,7 @@
                         <i class="fas fa-chart-pie"></i> Sebaran SPM
                     </button>
                     <button id="pills-fire-tab" role="tab" aria-selected="false" data-target="pills-fire" type="button">
-                        <i class="fas fa-satellite-dish"></i> Satelit NASA (live)
+                        <i class="fas fa-satellite-dish"></i> Titik Kebakaran Real Time
                     </button>
                 </div>
             </div>
@@ -180,21 +218,24 @@
 
                     <div id="nasa-loading" class="sp-loading">
                         <i class="fas fa-satellite fa-spin"></i>
-                        <b>Menghubungkan ke satelit NASA</b>
-                        <span>Memuat titik panas 24 jam terakhir (MODIS/VIIRS)</span>
+                        <b>Memuat deteksi hotspot satelit</b>
+                        <span>VIIRS NOAA-21 · deteksi 24 jam terakhir</span>
                     </div>
 
                     <div class="sp-fire-legend">
-                        <b>Tingkat keyakinan deteksi</b>
+                        <b>Confidence deteksi NASA FIRMS</b>
                         <div class="bar">
-                            <i style="background:#fdd64b" title="Sedang (40-60%)"></i>
-                            <i style="background:#ff9b57" title="Tinggi (61-84%)"></i>
-                            <i style="background:#fe6a69" title="Sangat tinggi (>85%)"></i>
+                            <i style="background:#fdd64b" title="Rendah"></i>
+                            <i style="background:#ff9b57" title="Nominal"></i>
+                            <i style="background:#fe6a69" title="Tinggi"></i>
                         </div>
-                        <div class="ends"><span>Titik panas</span><span>Api aktif</span></div>
+                        <div class="ends"><span>Rendah</span><span>Tinggi</span></div>
+                        <p id="nasa-data-status" class="sp-fire-status" role="status">Menunggu data NASA FIRMS…</p>
+                        <p class="sp-fire-note">Deteksi hotspot satelit bukan konfirmasi kebakaran di lapangan.</p>
                     </div>
                 </div>
             </div>
+            <div class="sp-map-detail" id="public-map-detail" aria-live="polite" hidden></div>
         </div>
     </section>
 
@@ -209,20 +250,42 @@
             </div>
 
             <div class="sp-prov reveal--stagger" id="provinsi-terdampak-container">
-                <div><span>Aceh</span><em>--</em></div>
-                <div><span>Bali</span><em>--</em></div>
-                <div><span>Banten</span><em>--</em></div>
-                <div><span>Jawa Barat</span><em>--</em></div>
-                <div><span>Jawa Tengah</span><em>--</em></div>
-                <div><span>Jawa Timur</span><em>--</em></div>
-                <div class="is-hot"><span>Kalimantan Barat</span><em><i class="fas fa-fire"></i> <span id="count-kalbar">0</span></em></div>
-                <div class="is-hot"><span>Kalimantan Tengah</span><em><i class="fas fa-fire"></i> <span id="count-kalteng">0</span></em></div>
-                <div class="is-hot"><span>Kalimantan Timur</span><em><i class="fas fa-fire"></i> <span id="count-kaltim">0</span></em></div>
-                <div class="is-hot"><span>Sumatera Selatan</span><em><i class="fas fa-fire"></i> <span id="count-sumsel">0</span></em></div>
-                <div class="is-hot"><span>Riau</span><em><i class="fas fa-fire"></i> <span id="count-riau">0</span></em></div>
-                <div><span>Papua</span><em>--</em></div>
+                <div class="sp-prov__empty">Menghitung deteksi per provinsi…</div>
             </div>
-            <p class="sp-note">Dan 27 provinsi lainnya.</p>
+            <a href="#daftar-provinsi-terdampak" class="sp-fire-more" id="show-all-hotspot-provinces" hidden>Selengkapnya <i class="fas fa-arrow-down"></i></a>
+            <p class="sp-note" id="provinsi-terdampak-note" aria-live="polite"></p>
+
+            <section class="sp-fire-full" id="daftar-provinsi-terdampak" hidden aria-labelledby="hotspot-list-title">
+                <div class="sp-fire-full__head">
+                    <div>
+                        <h3 id="hotspot-list-title">Data hotspot seluruh provinsi</h3>
+                        <p>Jumlah deteksi dibatasi pada titik yang masuk ke geometri provinsi. Fasilitas dan indeks memakai data SPM published tahun {{ $year ?? '-' }}.</p>
+                    </div>
+                    <label class="sp-fire-full__search" for="hotspot-province-search">
+                        <i class="fas fa-search" aria-hidden="true"></i>
+                        <input id="hotspot-province-search" type="search" placeholder="Cari provinsi…" autocomplete="off">
+                    </label>
+                </div>
+                <div class="sp-fire-full__table-wrap">
+                    <table class="sp-fire-full__table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Provinsi</th>
+                                <th scope="col">Hotspot</th>
+                                <th scope="col">Kab/Kota</th>
+                                <th scope="col">Indeks SPM</th>
+                                <th scope="col">Pos damkar</th>
+                                <th scope="col">SDM</th>
+                                <th scope="col">REDKAR</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hotspot-province-rows">
+                            <tr><td colspan="7" class="sp-fire-full__empty">Menunggu data satelit dan batas provinsi…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="sp-fire-full__result-count" id="hotspot-province-result-count" aria-live="polite"></p>
+            </section>
         </div>
     </section>
 
@@ -262,10 +325,10 @@
                 <div>
                     <h6>Untuk Pemda</h6>
                     <ul>
-                        <li><a href="{{ url('/login') }}">Portal evaluasi nasional</a></li>
-                        <li><a href="{{ url('/login') }}">Lapor data SPM</a></li>
-                        <li><a href="{{ url('/login') }}">Pendaftaran Pemda</a></li>
-                        <li><a href="#">Panduan penggunaan</a></li>
+                        <li><a href="#pemdaContactDialog" aria-haspopup="dialog" onclick="document.getElementById('pemdaContactDialog').showModal(); return false;">Portal evaluasi nasional</a></li>
+                        <li><a href="#pemdaContactDialog" aria-haspopup="dialog" onclick="document.getElementById('pemdaContactDialog').showModal(); return false;">Lapor data SPM</a></li>
+                        <li><a href="https://wa.me/6281226404858" target="_blank" rel="noopener noreferrer">Pendaftaran Pemda</a></li>
+                        <li><a href="{{ asset('document/Panduan%20Penggunaan%20V1.0.pdf') }}" target="_blank" rel="noopener noreferrer">Panduan penggunaan</a></li>
                     </ul>
                 </div>
 
@@ -274,22 +337,29 @@
                     <ul>
                         <li><a href="tel:112">Call center 112</a></li>
                         <li><a href="#map-section" onclick="document.getElementById('pills-fire-tab').click()">Lapor titik api aktif</a></li>
-                        <li><a href="#berita">Tips pencegahan &amp; mitigasi</a></li>
-                        <li><a href="#berita">Kesehatan &amp; asap</a></li>
-                        <li><a href="#">Direktori pos damkar</a></li>
+                        <li><a href="{{ $preventionNews['url'] ?? '#berita' }}">Tips pencegahan &amp; mitigasi</a></li>
+                        <li><a href="{{ route('news.show', 'kesehatan-dan-bahaya-paparan-asap-kebakaran-bagi-masyarakat') }}">Kesehatan &amp; asap</a></li>
+                        <li><a href="{{ route('news.index') }}">Direktori pos damkar</a></li>
                     </ul>
                 </div>
             </div>
+
+            <dialog class="site-footer__dialog" id="pemdaContactDialog" aria-labelledby="pemdaContactTitle">
+                <h2 id="pemdaContactTitle">Hubungi kami</h2>
+                <p>Maaf, untuk mengakses portal silakan hubungi kami melalui email.</p>
+                <a class="sp-btn sp-btn--yellow" href="mailto:pangestufalahasbi@gmail.com">Kirim email</a>
+                <form method="dialog"><button type="submit">Tutup</button></form>
+            </dialog>
 
             <div class="site-footer__bottom">
                 <div class="region">
                     <img src="https://flagcdn.com/w20/id.png" alt="Bendera Indonesia">
                     <b>Indonesia</b>
-                    <span><i class="fas fa-fire"></i> SPM Kebakaran, Nasional</span>
+                    <span><i class="fas fa-fire"></i> SPM Kebakaran, <a href="{{ route('login') }}" aria-label="Login operator" style="color: inherit; text-decoration: none;">Nasional</a></span>
                 </div>
                 <div class="links">
-                    <a href="mailto:info@kemendagri.go.id">Hubungi kami</a>
-                    <a href="mailto:support@damkar.go.id">Lapor kendala teknis</a>
+                    <a href="mailto:pangestufalahasbi@gmail.com">Hubungi kami</a>
+                    <a href="https://wa.me/6281226404858" target="_blank" rel="noopener noreferrer">Lapor kendala teknis</a>
                     <a href="#">Ketentuan penggunaan</a>
                     <a href="#">Kebijakan privasi</a>
                 </div>
@@ -403,6 +473,28 @@
             transition: background .2s;
         }
         .sp-search button:hover { background: var(--navy-dark); }
+        .sp-search__results { display: grid; gap: 6px; max-width: 560px; margin-top: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); box-shadow: 0 12px 30px rgba(8,31,77,.18); }
+        .sp-search__results[hidden] { display: none; }
+        .sp-search__result { display: grid; gap: 3px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+        .sp-search__result:hover, .sp-search__result:focus-visible { outline: 0; background: var(--mist); }
+        .sp-search__result-title { font-weight: 700; }
+        .sp-search__result-meta { color: var(--slate); font-size: .88rem; }
+        .sp-search__empty { margin: 0; padding: 10px 12px; color: var(--slate); }
+        .sp-area-detail { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafd; }
+        .sp-area-detail__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        .sp-area-detail__title { margin: 0; color: var(--ink); font-size: 1rem; font-weight: 700; }
+        .sp-area-detail__subtitle { margin: 3px 0 0; color: var(--slate); font-size: .88rem; }
+        .sp-area-detail__score { display: flex; align-items: center; gap: 10px; }
+        .sp-area-detail__score strong { color: var(--navy); font-size: 1.5rem; }
+        .sp-area-detail__metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; }
+        .sp-area-detail__metric { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+        .sp-area-detail__metric span { display: block; color: var(--slate); font-size: .75rem; }
+        .sp-area-detail__metric strong { display: block; margin-top: 3px; color: var(--ink); font-size: 1rem; }
+        .sp-area-detail__regencies { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px; max-height: 280px; overflow: auto; }
+        .sp-area-detail__regency { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); text-align: left; }
+        .sp-area-detail__regency:hover, .sp-area-detail__regency:focus-visible { border-color: var(--blue); background: var(--mist); }
+        .sp-map-detail { margin-top: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+        .sp-map-detail[hidden] { display: none; }
 
         .sp-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
         .sp-btn {
@@ -517,6 +609,8 @@
         .sp-fire-legend .bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; }
         .sp-fire-legend .bar i { flex: 1; }
         .sp-fire-legend .ends { display: flex; justify-content: space-between; margin-top: 6px; font-size: .75rem; color: var(--slate); }
+        .sp-fire-status { margin: 8px 0 0; color: var(--ink); font-size: .78rem; font-weight: 600; }
+        .sp-fire-note { margin: 4px 0 0; color: var(--slate); font-size: .7rem; line-height: 1.35; }
 
         .pulse-fire-icon { display: flex; align-items: center; justify-content: center; width: 35px; height: 35px; background: rgba(229,72,77,.18); border-radius: 50%; animation: sp-pulse 1.6s infinite; }
         .pulse-fire-icon i { color: var(--ember); font-size: 17px; }
@@ -535,6 +629,26 @@
         .sp-prov .is-hot > span { font-weight: 600; color: var(--navy); }
         .sp-prov .is-hot em span { color: var(--white); }
         .sp-note { margin: 16px 0 0; color: var(--slate); font-size: .9rem; }
+        .sp-fire-more { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 9px 14px; border: 1px solid var(--navy); border-radius: 8px; color: var(--navy); font-size: .88rem; font-weight: 600; text-decoration: none; }
+        .sp-fire-more:hover { background: var(--navy); color: var(--white); }
+        .sp-fire-full { margin-top: 22px; padding-top: 22px; border-top: 1px solid rgba(11,46,111,.18); scroll-margin-top: 24px; }
+        .sp-fire-full[hidden], .sp-fire-more[hidden] { display: none; }
+        .sp-fire-full__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 12px; }
+        .sp-fire-full__head h3 { margin: 0; color: var(--navy); font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
+        .sp-fire-full__head p { margin: 5px 0 0; color: var(--slate); font-size: .84rem; }
+        .sp-fire-full__search { display: flex; align-items: center; gap: 8px; min-width: min(100%, 280px); padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--slate); }
+        .sp-fire-full__search:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,95,209,.12); }
+        .sp-fire-full__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; }
+        .sp-fire-full__table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
+        .sp-fire-full__table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .85rem; }
+        .sp-fire-full__table th, .sp-fire-full__table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+        .sp-fire-full__table th:first-child, .sp-fire-full__table td:first-child { text-align: left; }
+        .sp-fire-full__table th { background: #f4f7fc; color: var(--slate); font-size: .75rem; font-weight: 700; }
+        .sp-fire-full__table tbody tr:last-child td { border-bottom: 0; }
+        .sp-fire-full__table tbody tr:hover { background: #f8fafd; }
+        .sp-fire-full__table td:first-child { color: var(--ink); font-weight: 600; }
+        .sp-fire-full__empty { padding: 20px !important; color: var(--slate) !important; text-align: center !important; }
+        .sp-fire-full__result-count { margin: 8px 0 0; color: var(--slate); font-size: .78rem; }
 
         .sp-cta { background: var(--red); color: var(--white); padding: 40px 0; }
         .sp-cta__in { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
@@ -554,6 +668,11 @@
         .site-footer li a { color: #c3cfea; text-decoration: none; font-size: .9rem; transition: color .2s; }
         .site-footer li a:hover { color: var(--yellow); }
 
+        .site-footer__dialog { max-width: 440px; width: calc(100% - 32px); border: 0; border-radius: 16px; padding: 28px; color: var(--navy); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+        .site-footer__dialog::backdrop { background: rgba(5, 20, 49, .65); }
+        .site-footer__dialog h2 { margin: 0 0 12px; font-size: 1.3rem; }
+        .site-footer__dialog p { margin: 0 0 20px; }
+        .site-footer__dialog form { margin-top: 14px; }
         .site-footer__bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 40px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.16); font-size: .875rem; }
         .site-footer .region { display: flex; align-items: center; gap: 10px; color: #c3cfea; }
         .site-footer .region b { color: var(--white); font-weight: 600; }
@@ -614,7 +733,7 @@
         @media (max-width: 640px) {
             .sp-news { padding-top: 44px; }
             .sp-news__card { flex-basis: 84%; }
-            .sp-news__all { display: none; }
+            .sp-news__ctrl { gap: 6px; }
         }
 
         /* ---------- Navbar (berasal dari layouts.public, ditimpa agar serasi) ---------- */
@@ -738,99 +857,662 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-
-            // Animasi ring nilai nasional (82,45 dari 100)
             var ring = document.getElementById('ringValue');
-            var circumference = 578; // 2 * PI * 92
-            var score = 82.45;
+            var circumference = 578;
+            var score = Number({{ (float) ($avgNilaiAkhir ?? 0) }});
             requestAnimationFrame(function () {
-                ring.style.strokeDashoffset = circumference * (1 - score / 100);
+                ring.style.strokeDashoffset = circumference * (1 - (score / 100));
             });
 
-            // Peta SPM
-            var mapSpm = L.map('map-spm').setView([-0.789275, 113.921327], 5);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18
+            var mapSpm = L.map('map-spm').setView([-2.5489, 118.0149], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
             }).addTo(mapSpm);
 
-            // Peta titik api (basemap terang agar sesuai tema putih)
-            var mapFire = L.map('map-fire').setView([-0.789275, 113.921327], 5);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap &copy; CARTO | Data: NASA FIRMS', maxZoom: 18
+            var mapFire = L.map('map-fire').setView([-2.5489, 118.0149], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors | Data: NASA FIRMS', maxZoom: 18
             }).addTo(mapFire);
 
-            var fireIcon = L.divIcon({
-                html: '<div class="pulse-fire-icon"><i class="fas fa-fire"></i></div>',
-                className: 'custom-leaflet-fire-icon', iconSize: [35, 35], iconAnchor: [17, 17], popupAnchor: [0, -15]
-            });
+            var mapColors = {
+                'Sangat Baik': '#198754',
+                'Baik': '#0d6efd',
+                'Cukup': '#ffc107',
+                'Kurang': '#dc3545',
+                'Belum ada data': '#cccccc',
+            };
 
-            var nasaUrl = 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_South_East_Asia_24h.csv';
+            var mapPayload = @json($mapPayload ?? ['year' => null, 'provinces' => []]);
+            var searchInput = document.getElementById('searchInput');
+            var searchButton = document.querySelector('.sp-search button');
+            var searchResults = document.getElementById('searchResults');
+            var publicMapDetail = document.getElementById('public-map-detail');
+            var geoJsonCodeCounts = {};
+            var mapDataDb = {};
+            var mapDataByGeojsonCode = {};
+            var selectedProvinceLayer = null;
+            var dashboardGeoJsonLayer = null;
+            var hotspotProvinceLayers = [];
+            var hotspotProvinceCounts = [];
+            var hotspotFeatures = null;
+            var hotspotSummaryElement = document.getElementById('provinsi-terdampak-container');
+            var hotspotSummaryNote = document.getElementById('provinsi-terdampak-note');
+            var allHotspotProvincesLink = document.getElementById('show-all-hotspot-provinces');
+            var allHotspotProvincesSection = document.getElementById('daftar-provinsi-terdampak');
+            var hotspotProvinceSearch = document.getElementById('hotspot-province-search');
+            var hotspotProvinceRows = document.getElementById('hotspot-province-rows');
+            var hotspotProvinceResultCount = document.getElementById('hotspot-province-result-count');
+            var selectedRegencyMarker = null;
+            var geocodeCache = new Map();
+            var geocodeQueue = Promise.resolve();
+            var lastGeocodeRequest = 0;
 
-            async function fetchNasaData() {
-                const proxies = [
-                    'https://api.allorigins.win/get?url=',
-                    'https://api.codetabs.com/v1/proxy?quest=',
-                    'https://corsproxy.io/?'
-                ];
-                for (let i = 0; i < proxies.length; i++) {
-                    try {
-                        let response = await fetch(proxies[i] + encodeURIComponent(nasaUrl));
-                        if (!response.ok) continue;
-                        if (proxies[i].includes('allorigins')) {
-                            let json = await response.json();
-                            if (json.contents) return json.contents;
-                        } else {
-                            return await response.text();
-                        }
-                    } catch (e) {}
-                }
-                throw new Error('Gagal terhubung ke satelit.');
+            function addText(parent, tagName, text, className) {
+                var element = document.createElement(tagName);
+                element.textContent = text;
+                if (className) element.className = className;
+                parent.appendChild(element);
+                return element;
             }
 
-            fetchNasaData()
-                .then(function (csvText) {
-                    document.getElementById('nasa-loading').style.display = 'none';
-                    var lines = csvText.trim().split('\n');
-                    var fireGroup = L.layerGroup().addTo(mapFire);
+            function mapKey(name) {
+                var normalized = (name || '').toLocaleUpperCase('id-ID').trim()
+                    .replace(/^PROVINSI\s+/, '')
+                    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                    .trim();
 
-                    var countKalbar = 0, countKalteng = 0, countKaltim = 0, countSumsel = 0, countRiau = 0;
+                if (['DI YOGYAKARTA', 'DAERAH ISTIMEWA YOGYAKARTA'].includes(normalized)) return 'YOGYAKARTA';
+                if (['DKI JAKARTA', 'JAKARTA'].includes(normalized)) return 'JAKARTA';
 
-                    for (var i = 1; i < lines.length; i++) {
-                        var data = lines[i].split(',');
-                        if (data.length < 9) continue;
-                        var lat = parseFloat(data[0]);
-                        var lng = parseFloat(data[1]);
-                        var confidence = parseInt(data[8]);
+                return normalized.replace(/\s+/g, '');
+            }
 
-                        if (lat >= -11 && lat <= 6 && lng >= 95 && lng <= 141 && confidence >= 40) {
-                            if (lat >= -3 && lat <= 2 && lng >= 108 && lng <= 114) countKalbar++;
-                            else if (lat >= -4 && lat <= 1 && lng >= 111 && lng <= 116) countKalteng++;
-                            else if (lat >= -2 && lat <= 3 && lng >= 115 && lng <= 119) countKaltim++;
-                            else if (lat >= -4 && lat <= -1 && lng >= 102 && lng <= 106) countSumsel++;
-                            else if (lat >= -1 && lat <= 2 && lng >= 100 && lng <= 103) countRiau++;
+            function searchKey(value) {
+                return (value || '').toLocaleLowerCase('id-ID')
+                    .replace(/^(kabupaten|kab\.?|kota|provinsi)\s*/u, '')
+                    .replace(/[^\p{L}\p{N}]+/gu, '');
+            }
 
-                            var color = confidence >= 85 ? '#fe6a69' : (confidence >= 65 ? '#ff9b57' : '#fdd64b');
-                            L.circle([lat, lng], { color: color, fillColor: color, fillOpacity: 0.4, weight: 0, radius: confidence * 120 }).addTo(fireGroup);
+            function appendAreaMetrics(parent, metrics) {
+                var labels = [
+                    ['kecamatan', 'Kecamatan'],
+                    ['pos_damkar', 'Pos damkar'],
+                    ['sdm', 'Personel'],
+                    ['sdm_bersertifikat', 'Personel bersertifikat'],
+                    ['desa', 'Desa terdata'],
+                    ['redkar', 'Anggota REDKAR'],
+                    ['kelembagaan', 'Kelembagaan'],
+                    ['perencanaan', 'Perencanaan'],
+                    ['capaian', 'Capaian layanan'],
+                    ['sarpras', 'Sarana prasarana'],
+                    ['sdm_dimension', 'Dimensi SDM'],
+                    ['pemberdayaan', 'Pemberdayaan'],
+                ];
+                var grid = document.createElement('div');
+                grid.className = 'sp-area-detail__metrics';
 
-                            if (confidence >= 85) {
-                                L.marker([lat, lng], { icon: fireIcon }).addTo(fireGroup)
-                                    .bindPopup('<b>Titik api aktif</b><br>Akurasi: ' + confidence + '%');
-                            }
-                        }
-                    }
-
-                    document.getElementById('count-kalbar').innerText = countKalbar;
-                    document.getElementById('count-kalteng').innerText = countKalteng;
-                    document.getElementById('count-kaltim').innerText = countKaltim;
-                    document.getElementById('count-sumsel').innerText = countSumsel;
-                    document.getElementById('count-riau').innerText = countRiau;
-                })
-                .catch(function () {
-                    document.getElementById('nasa-loading').innerHTML =
-                        '<b>Data satelit belum bisa dimuat</b><span>Periksa koneksi internet, lalu muat ulang halaman.</span>';
+                labels.forEach(function (item) {
+                    if (metrics[item[0]] === null || metrics[item[0]] === undefined) return;
+                    var cell = document.createElement('div');
+                    cell.className = 'sp-area-detail__metric';
+                    addText(cell, 'span', item[1]);
+                    addText(cell, 'strong', Number(metrics[item[0]]).toLocaleString('id-ID', { maximumFractionDigits: 2 }));
+                    grid.appendChild(cell);
                 });
 
-            // Tab peta (tanpa ketergantungan Bootstrap JS)
+                if (grid.childElementCount > 0) parent.appendChild(grid);
+            }
+
+            function createAreaDetail(area, province, options) {
+                var detail = document.createElement('section');
+                detail.className = 'sp-area-detail';
+                var heading = document.createElement('div');
+                heading.className = 'sp-area-detail__heading';
+                var name = document.createElement('div');
+                addText(name, 'h3', area.name || area.province_name, 'sp-area-detail__title');
+                addText(name, 'p', (area.type === 'regency' ? province.province_name + ' · ' : '') + 'Data terpublikasi tahun ' + mapPayload.year, 'sp-area-detail__subtitle');
+                heading.appendChild(name);
+
+                var score = document.createElement('div');
+                score.className = 'sp-area-detail__score';
+                if (area.spm === null || area.spm === undefined) {
+                    addText(score, 'span', 'Belum ada data', 'badge bg-secondary');
+                } else {
+                    addText(score, 'strong', Number(area.spm).toFixed(2));
+                    var badge = addText(score, 'span', area.category, 'badge');
+                    badge.style.backgroundColor = mapColors[area.category];
+                    badge.style.color = '#fff';
+                }
+                heading.appendChild(score);
+                detail.appendChild(heading);
+                appendAreaMetrics(detail, area.metrics || {});
+
+                if (options && options.showLocationButton) {
+                    var locateButton = addText(detail, 'button', 'Lihat lokasi di peta', 'btn btn-primary btn-sm justify-self-start');
+                    locateButton.type = 'button';
+                    locateButton.addEventListener('click', function () {
+                        document.getElementById('pills-spm-tab').click();
+                        document.getElementById('map-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        locateRegency(area, province);
+                    });
+                }
+
+                return detail;
+            }
+
+            function locateRegency(regency, province) {
+                if (!dashboardGeoJsonLayer) return;
+                var matchedLayer = null;
+                dashboardGeoJsonLayer.eachLayer(function (layer) {
+                    if (provinceForFeature(layer.feature)?.id === province.id) matchedLayer = layer;
+                });
+                if (!matchedLayer) return;
+
+                var regencyName = regency.regency_name || regency.name;
+                var queryName = regencyName.replace(/^(KABUPATEN|KAB\.?|KOTA)\s*/i, '').trim();
+                var query = queryName + ', ' + province.province_name + ', Indonesia';
+                var provinceBounds = matchedLayer.getBounds();
+                mapSpm.fitBounds(provinceBounds, { padding: [24, 24] });
+
+                var pending = geocodeCache.get(query);
+                if (!pending) {
+                    pending = geocodeQueue.then(async function () {
+                        var delay = Math.max(0, 1100 - (Date.now() - lastGeocodeRequest));
+                        if (delay > 0) await new Promise(function (resolve) { window.setTimeout(resolve, delay); });
+                        lastGeocodeRequest = Date.now();
+                        var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=id&limit=1&q=' + encodeURIComponent(query);
+                        var response = await fetch(url, { headers: { Accept: 'application/json' } });
+                        if (!response.ok) throw new Error('Lokasi wilayah tidak dapat dimuat.');
+                        var results = await response.json();
+                        return results[0] || null;
+                    });
+                    geocodeQueue = pending.catch(function () {});
+                    geocodeCache.set(query, pending);
+                }
+
+                pending.then(function (location) {
+                    if (!location) throw new Error('Lokasi wilayah tidak ditemukan.');
+                    var latitude = Number(location.lat);
+                    var longitude = Number(location.lon);
+                    var bounds = location.boundingbox.map(Number);
+                    if (selectedRegencyMarker) mapSpm.removeLayer(selectedRegencyMarker);
+                    selectedRegencyMarker = L.marker([latitude, longitude]).addTo(mapSpm);
+                    selectedRegencyMarker.bindPopup('<strong>' + regencyName + '</strong><br>Lokasi administratif · OpenStreetMap').openPopup();
+                    mapSpm.fitBounds([[bounds[0], bounds[2]], [bounds[1], bounds[3]]], { maxZoom: 11, padding: [24, 24] });
+                }).catch(function () {
+                    var notice = document.createElement('p');
+                    notice.className = 'sp-area-detail__subtitle';
+                    notice.textContent = 'Lokasi kabupaten tidak berhasil dimuat; peta menampilkan wilayah provinsinya.';
+                    publicMapDetail.appendChild(notice);
+                });
+            }
+
+            function showSearchDetail(result) {
+                var province = (mapPayload.provinces || []).find(function (item) { return item.id === result.provinceId; });
+                if (!province) return;
+                searchResults.querySelectorAll('.sp-search__result').forEach(function (button) {
+                    button.setAttribute('aria-selected', String(button.dataset.resultKey === result.key));
+                });
+                var previous = searchResults.querySelector('.sp-area-detail');
+                if (previous) previous.remove();
+                var detail = createAreaDetail(result, province, { showLocationButton: result.type === 'regency' });
+                searchResults.appendChild(detail);
+            }
+
+            function runAreaSearch() {
+                var query = searchKey(searchInput.value.trim());
+                searchResults.replaceChildren();
+
+                if (query.length < 2) {
+                    searchResults.hidden = true;
+                    return;
+                }
+
+                var matches = [];
+                (mapPayload.provinces || []).forEach(function (province) {
+                    if (searchKey(province.province_name).includes(query) && province.spm !== null) {
+                        matches.push({
+                            type: 'province',
+                            name: province.province_name,
+                            provinceName: province.province_name,
+                            provinceId: province.id,
+                            spm: province.spm,
+                            category: province.category,
+                            metrics: Object.assign({ regencies: province.regency_count }, province.metrics || {}),
+                            key: 'province-' + province.id,
+                        });
+                    }
+
+                    (province.regencies || []).forEach(function (regency) {
+                        if (searchKey(regency.regency_name).includes(query)) {
+                            matches.push({
+                                type: 'regency',
+                                name: regency.regency_name,
+                                provinceName: province.province_name,
+                                provinceId: province.id,
+                                spm: regency.spm,
+                                category: regency.category,
+                                metrics: regency.metrics || {},
+                                regency_name: regency.regency_name,
+                                key: 'regency-' + regency.id,
+                            });
+                        }
+                    });
+                });
+
+                matches.sort(function (left, right) {
+                    var leftRank = searchKey(left.name) === query ? 0 : (searchKey(left.name).startsWith(query) ? 1 : 2);
+                    var rightRank = searchKey(right.name) === query ? 0 : (searchKey(right.name).startsWith(query) ? 1 : 2);
+                    return leftRank - rightRank || left.name.localeCompare(right.name, 'id');
+                });
+
+                if (matches.length === 0) {
+                    addText(searchResults, 'p', 'Tidak ada data published yang cocok untuk tahun ' + (mapPayload.year ?? 'ini') + '.', 'sp-search__empty');
+                    searchResults.hidden = false;
+                    return;
+                }
+
+                matches.slice(0, 8).forEach(function (result) {
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'sp-search__result';
+                    button.setAttribute('role', 'option');
+                    addText(button, 'span', result.type === 'regency' ? result.name + ' · ' + result.provinceName : result.name, 'sp-search__result-title');
+                    addText(button, 'span', 'Indeks SPM ' + Number(result.spm).toFixed(2) + ' · ' + result.category + ' · Tahun ' + mapPayload.year, 'sp-search__result-meta');
+                    button.dataset.resultKey = result.key;
+                    button.addEventListener('click', function () {
+                        showSearchDetail(result);
+                    });
+                    searchResults.appendChild(button);
+                });
+
+                searchResults.hidden = false;
+                showSearchDetail(matches[0]);
+            }
+
+            searchButton.addEventListener('click', runAreaSearch);
+            searchInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    runAreaSearch();
+                }
+            });
+            searchInput.addEventListener('input', function () {
+                if (searchInput.value.trim().length >= 2) runAreaSearch();
+                else searchResults.hidden = true;
+            });
+
+            function categoryForIndex(index) {
+                if (index === null || index === undefined) return 'Belum ada data';
+                if (index >= 85) return 'Sangat Baik';
+                if (index >= 70) return 'Baik';
+                if (index >= 55) return 'Cukup';
+                return 'Kurang';
+            }
+
+            function rebuildMapIndexes() {
+                mapDataDb = Object.fromEntries((mapPayload.provinces || []).map(function (province) {
+                    return [province.map_key, province];
+                }));
+                mapDataByGeojsonCode = Object.fromEntries((mapPayload.provinces || [])
+                    .filter(function (province) {
+                        return province.geojson_code && geoJsonCodeCounts[province.geojson_code] === 1;
+                    })
+                    .map(function (province) {
+                        return [province.geojson_code, province];
+                    }));
+            }
+
+            function provinceForFeature(feature) {
+                var code = String(feature.properties.KODE_PROV || '').trim();
+                return mapDataByGeojsonCode[code] || mapDataDb[mapKey(feature.properties.PROVINSI)] || null;
+            }
+
+            function ringContainsPoint(ring, longitude, latitude) {
+                var inside = false;
+                for (var current = 0, previous = ring.length - 1; current < ring.length; previous = current++) {
+                    var currentPoint = ring[current];
+                    var previousPoint = ring[previous];
+                    var crossesLatitude = (currentPoint[1] > latitude) !== (previousPoint[1] > latitude);
+                    if (crossesLatitude) {
+                        var crossingLongitude = (previousPoint[0] - currentPoint[0]) * (latitude - currentPoint[1]) /
+                            (previousPoint[1] - currentPoint[1]) + currentPoint[0];
+                        if (longitude < crossingLongitude) inside = !inside;
+                    }
+                }
+                return inside;
+            }
+
+            function polygonContainsPoint(rings, longitude, latitude) {
+                return rings.length > 0 && ringContainsPoint(rings[0], longitude, latitude) &&
+                    !rings.slice(1).some(function (hole) { return ringContainsPoint(hole, longitude, latitude); });
+            }
+
+            function geometryContainsPoint(geometry, longitude, latitude) {
+                if (geometry.type === 'Polygon') return polygonContainsPoint(geometry.coordinates, longitude, latitude);
+                if (geometry.type === 'MultiPolygon') {
+                    return geometry.coordinates.some(function (polygon) {
+                        return polygonContainsPoint(polygon, longitude, latitude);
+                    });
+                }
+                return false;
+            }
+
+            function renderHotspotProvinceSummary() {
+                if (!hotspotProvinceLayers.length || !Array.isArray(hotspotFeatures)) return;
+
+                var counts = hotspotProvinceLayers.map(function (entry) {
+                    return {
+                        name: entry.feature.properties.PROVINSI || 'Provinsi tidak diketahui',
+                        count: 0,
+                        entry: entry,
+                        provinceData: provinceForFeature(entry.feature),
+                    };
+                });
+                var matchedPoints = 0;
+
+                hotspotFeatures.forEach(function (feature) {
+                    var coordinates = feature.geometry?.coordinates;
+                    if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+                    var longitude = Number(coordinates[0]);
+                    var latitude = Number(coordinates[1]);
+                    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+
+                    var province = counts.find(function (item) {
+                        return item.entry.bounds.contains([latitude, longitude]) &&
+                            geometryContainsPoint(item.entry.feature.geometry, longitude, latitude);
+                    });
+                    if (province) {
+                        province.count++;
+                        matchedPoints++;
+                    }
+                });
+
+                counts.sort(function (left, right) {
+                    return right.count - left.count || left.name.localeCompare(right.name, 'id');
+                });
+                hotspotProvinceCounts = counts;
+                hotspotSummaryElement.replaceChildren();
+                counts.slice(0, 12).forEach(function (province) {
+                    var row = document.createElement('div');
+                    if (province.count > 0) row.className = 'is-hot';
+                    addText(row, 'span', province.name);
+                    var value = document.createElement('em');
+                    if (province.count > 0) {
+                        var icon = document.createElement('i');
+                        icon.className = 'fas fa-fire';
+                        value.appendChild(icon);
+                        value.appendChild(document.createTextNode(' '));
+                    }
+                    value.appendChild(document.createTextNode(province.count.toLocaleString('id-ID')));
+                    row.appendChild(value);
+                    hotspotSummaryElement.appendChild(row);
+                });
+
+                hotspotSummaryNote.textContent = 'Menampilkan 12 provinsi teratas · ' +
+                    matchedPoints.toLocaleString('id-ID') + ' dari ' + hotspotFeatures.length.toLocaleString('id-ID') +
+                    ' titik berada di dalam batas provinsi GeoJSON.';
+                allHotspotProvincesLink.hidden = false;
+                renderAllHotspotProvinces(counts);
+            }
+
+            function renderAllHotspotProvinces(provinces) {
+                var query = searchKey(hotspotProvinceSearch.value.trim());
+                var visibleProvinces = provinces.filter(function (item) {
+                    return searchKey(item.name).includes(query);
+                });
+                hotspotProvinceRows.replaceChildren();
+
+                if (visibleProvinces.length === 0) {
+                    var emptyRow = document.createElement('tr');
+                    var emptyCell = addText(emptyRow, 'td', 'Tidak ada provinsi yang cocok dengan pencarian.', 'sp-fire-full__empty');
+                    emptyCell.colSpan = 7;
+                    hotspotProvinceRows.appendChild(emptyRow);
+                    hotspotProvinceResultCount.textContent = '0 provinsi ditemukan.';
+                    return;
+                }
+
+                visibleProvinces.forEach(function (item) {
+                    var row = document.createElement('tr');
+                    var province = item.provinceData;
+                    var metrics = province?.metrics || {};
+                    var index = province?.spm;
+                    addText(row, 'td', item.name);
+                    addText(row, 'td', item.count.toLocaleString('id-ID'));
+                    addText(row, 'td', String(province?.regency_count ?? 0));
+                    addText(row, 'td', index === null || index === undefined ? '—' : Number(index).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                    addText(row, 'td', Number(metrics.pos_damkar || 0).toLocaleString('id-ID'));
+                    addText(row, 'td', Number(metrics.sdm || 0).toLocaleString('id-ID'));
+                    addText(row, 'td', Number(metrics.redkar || 0).toLocaleString('id-ID'));
+                    hotspotProvinceRows.appendChild(row);
+                });
+
+                hotspotProvinceResultCount.textContent = 'Menampilkan ' + visibleProvinces.length.toLocaleString('id-ID') +
+                    ' dari ' + provinces.length.toLocaleString('id-ID') + ' provinsi.';
+            }
+
+            allHotspotProvincesLink.addEventListener('click', function () {
+                allHotspotProvincesSection.hidden = false;
+                window.setTimeout(function () {
+                    allHotspotProvincesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    hotspotProvinceSearch.focus({ preventScroll: true });
+                }, 0);
+            });
+            hotspotProvinceSearch.addEventListener('input', function () {
+                renderAllHotspotProvinces(hotspotProvinceCounts);
+            });
+
+            function renderProvinceDetail(province) {
+                if (!province) return;
+                publicMapDetail.replaceChildren();
+                publicMapDetail.hidden = false;
+                var area = Object.assign({ name: province.province_name, type: 'province', spm: province.spm }, province);
+                publicMapDetail.appendChild(createAreaDetail(area, province));
+
+                var title = addText(publicMapDetail, 'h3', 'Kabupaten/kota dengan data terpublikasi', 'sp-area-detail__title mt-3 mb-2');
+                var list = document.createElement('div');
+                list.className = 'sp-area-detail__regencies';
+                var regencies = province.regencies || [];
+                if (regencies.length === 0) {
+                    addText(publicMapDetail, 'p', 'Belum ada data kabupaten/kota yang dipublikasikan untuk tahun ini.', 'text-muted mb-0');
+                    return;
+                }
+                regencies.forEach(function (regency) {
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'sp-area-detail__regency';
+                    addText(button, 'span', regency.regency_name);
+                    addText(button, 'strong', Number(regency.spm).toFixed(2) + ' · ' + regency.category);
+                    button.addEventListener('click', function () {
+                        publicMapDetail.replaceChildren(createAreaDetail(Object.assign({ type: 'regency' }, regency), province));
+                        var note = addText(publicMapDetail, 'p', 'Mencari lokasi administratif ' + regency.regency_name + ' di OpenStreetMap…', 'sp-area-detail__subtitle mt-2');
+                        locateRegency(regency, province);
+                        publicMapDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    });
+                    list.appendChild(button);
+                });
+                publicMapDetail.appendChild(title);
+                publicMapDetail.appendChild(list);
+            }
+
+            function createProvincePopup(provinceName, provinceData) {
+                var wrapper = document.createElement('div');
+                addText(wrapper, 'h6', provinceData?.province_name || provinceName, 'fw-bold mb-1');
+
+                if (!provinceData || provinceData.spm === null) {
+                    addText(wrapper, 'p', 'Belum ada data yang dipublikasikan untuk tahun ' + (mapPayload.year ?? 'ini') + '.', 'mb-0 text-muted');
+                    return wrapper;
+                }
+
+                var badge = addText(wrapper, 'span', provinceData.category, 'badge');
+                badge.style.backgroundColor = mapColors[provinceData.category];
+                badge.style.color = '#fff';
+
+                var divider = document.createElement('hr');
+                divider.className = 'my-2';
+                wrapper.appendChild(divider);
+
+                var list = document.createElement('ul');
+                list.className = 'list-unstyled mb-0';
+                addText(list, 'li', 'Indeks SPM: ' + Number(provinceData.spm).toFixed(2));
+                addText(list, 'li', 'Data Kabupaten/Kota: ' + provinceData.regency_count);
+                wrapper.appendChild(list);
+
+                if ((provinceData.regencies || []).length > 0) {
+                    var topTitle = addText(wrapper, 'strong', 'Top Kabupaten/Kota', 'd-block mt-2');
+                    var regencyList = document.createElement('ol');
+                    regencyList.className = 'mb-0 ps-3';
+                    provinceData.regencies.slice(0, 5).forEach(function (regency) {
+                        var item = document.createElement('li');
+                        var button = addText(item, 'button', regency.regency_name + ' — ' + Number(regency.spm).toFixed(2), 'btn btn-link btn-sm p-0 text-start');
+                        button.type = 'button';
+                        button.addEventListener('click', function () {
+                            publicMapDetail.replaceChildren(createAreaDetail(Object.assign({ type: 'regency' }, regency), provinceData));
+                            publicMapDetail.hidden = false;
+                            locateRegency(regency, provinceData);
+                            publicMapDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        });
+                        regencyList.appendChild(item);
+                    });
+                    wrapper.appendChild(topTitle);
+                    wrapper.appendChild(regencyList);
+                }
+
+                return wrapper;
+            }
+
+            fetch('{{ url("geojson/indonesia-prov.geojson") }}')
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    hotspotProvinceLayers = [];
+                    data.features.forEach(function (feature) {
+                        var code = String(feature.properties.KODE_PROV || '').trim();
+                        geoJsonCodeCounts[code] = (geoJsonCodeCounts[code] || 0) + 1;
+                    });
+                    rebuildMapIndexes();
+
+                    dashboardGeoJsonLayer = L.geoJson(data, {
+                        style: function (feature) {
+                            var provinceData = provinceForFeature(feature);
+                            return {
+                                fillColor: mapColors[categoryForIndex(provinceData?.spm ?? provinceData?.index)],
+                                weight: 2,
+                                opacity: 1,
+                                color: 'white',
+                                dashArray: '3',
+                                fillOpacity: 0.7
+                            };
+                        },
+                        onEachFeature: function (feature, layer) {
+                            hotspotProvinceLayers.push({ feature: feature, bounds: layer.getBounds() });
+                            var provinceName = feature.properties.PROVINSI;
+                            var provinceData = provinceForFeature(feature);
+                            layer.bindPopup(createProvincePopup(provinceName, provinceData));
+                            layer.bindTooltip(provinceName + '<br>' + (provinceData && provinceData.spm !== null ? Number(provinceData.spm).toFixed(2) + ' · ' + provinceData.category : 'Belum ada data'), { sticky: true });
+                            layer.on({
+                                mouseover: function (event) {
+                                    event.target.setStyle({ weight: 4, color: '#333', dashArray: '', fillOpacity: 0.9 });
+                                    event.target.bringToFront();
+                                },
+                                mouseout: function (event) {
+                                    dashboardGeoJsonLayer.resetStyle(event.target);
+                                },
+                                click: function (event) {
+                                    if (selectedProvinceLayer) dashboardGeoJsonLayer.resetStyle(selectedProvinceLayer);
+                                    selectedProvinceLayer = event.target;
+                                    selectedProvinceLayer.setStyle({ weight: 4, color: '#1f2937', dashArray: '', fillOpacity: 0.9 });
+                                    mapSpm.fitBounds(selectedProvinceLayer.getBounds(), { padding: [24, 24] });
+                                    renderProvinceDetail(provinceData);
+                                }
+                            });
+                        }
+                    }).addTo(mapSpm);
+                    renderHotspotProvinceSummary();
+                })
+                .catch(function (error) {
+                    console.error('Failed to load public map data:', error);
+                });
+
+            var fireGroup = L.layerGroup().addTo(mapFire);
+            var hotspotEndpoint = @json(route('peta.hotspots'));
+            var hotspotLoadInProgress = false;
+            var hasLoadedHotspots = false;
+
+            function confidenceColor(confidence) {
+                var level = String(confidence || '').toLowerCase();
+                if (level === 'h' || level === 'high' || (Number.isFinite(Number(level)) && Number(level) >= 80)) return '#fe6a69';
+                if (level === 'n' || level === 'nominal' || (Number.isFinite(Number(level)) && Number(level) >= 50)) return '#ff9b57';
+                return '#fdd64b';
+            }
+
+            function hotspotPopup(properties) {
+                var popup = document.createElement('div');
+                addText(popup, 'strong', 'Deteksi hotspot satelit', 'd-block mb-1');
+                addText(popup, 'div', 'Confidence: ' + properties.confidence_label);
+                if (properties.brightness !== null) addText(popup, 'div', 'Brightness: ' + properties.brightness + ' K');
+                if (properties.frp !== null) addText(popup, 'div', 'Fire radiative power: ' + properties.frp + ' MW');
+                addText(popup, 'div', 'Satelit: ' + (properties.satellite || '-') + ' · ' + (properties.instrument || '-'));
+                var time = String(properties.acq_time || '').padStart(4, '0');
+                addText(popup, 'div', 'Waktu deteksi: ' + (properties.acq_date || '-') + ' ' + time.slice(0, 2) + ':' + time.slice(2, 4) + ' UTC');
+                addText(popup, 'small', 'NASA FIRMS · hotspot perlu verifikasi lapangan', 'd-block mt-1 text-muted');
+                return popup;
+            }
+
+            async function loadNasaHotspots() {
+                if (hotspotLoadInProgress) return;
+                hotspotLoadInProgress = true;
+                var loading = document.getElementById('nasa-loading');
+                var status = document.getElementById('nasa-data-status');
+
+                try {
+                    var response = await fetch(hotspotEndpoint, { headers: { Accept: 'application/geo+json, application/json' } });
+                    var payload = await response.json();
+                    if (!response.ok) throw new Error(payload.message || 'Data NASA FIRMS belum tersedia.');
+
+                    fireGroup.clearLayers();
+                    hotspotFeatures = payload.features || [];
+                    hotspotFeatures.forEach(function (feature) {
+                        if (!feature.geometry || feature.geometry.type !== 'Point') return;
+                        var coordinates = feature.geometry.coordinates;
+                        var lng = Number(coordinates[0]);
+                        var lat = Number(coordinates[1]);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                        var properties = feature.properties || {};
+                        var color = confidenceColor(properties.confidence);
+                        var frp = Number(properties.frp) || 0;
+                        L.circleMarker([lat, lng], {
+                            radius: Math.max(5, Math.min(10, 4 + Math.sqrt(frp))),
+                            color: color,
+                            weight: 1,
+                            fillColor: color,
+                            fillOpacity: 0.78,
+                        }).addTo(fireGroup).bindPopup(hotspotPopup(properties));
+
+                    });
+                    renderHotspotProvinceSummary();
+
+                    var updatedAt = new Date(payload.retrieved_at).toLocaleTimeString('id-ID', {
+                        timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit'
+                    });
+                    status.textContent = payload.count + ' hotspot · ' + payload.product + ' · diperbarui ' + updatedAt + ' WIB';
+                    loading.style.display = 'none';
+                    hasLoadedHotspots = true;
+                } catch (error) {
+                    status.textContent = hasLoadedHotspots ? 'Pembaruan gagal; menampilkan data terakhir.' : 'Data satelit sementara tidak dapat dimuat.';
+                    if (!hasLoadedHotspots) {
+                        loading.replaceChildren();
+                        addText(loading, 'b', 'Data satelit belum tersedia');
+                        addText(loading, 'span', error.message || 'Coba lagi beberapa saat.');
+                    }
+                } finally {
+                    hotspotLoadInProgress = false;
+                }
+            }
+
+            loadNasaHotspots();
+            window.setInterval(loadNasaHotspots, 5 * 60 * 1000);
+
             var tabs = document.querySelectorAll('.sp-tabs button');
             tabs.forEach(function (tab) {
                 tab.addEventListener('click', function () {

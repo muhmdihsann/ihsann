@@ -39,6 +39,13 @@
             </select>
         </div>
         @if($year)
+            <div class="col-auto">
+                <a href="{{ route('export.excel', ['year' => $year]) }}" class="btn btn-success">
+                    <i class="fas fa-file-excel me-2"></i>Cetak Laporan Excel
+                </a>
+            </div>
+        @endif
+        @if($year)
             <div class="col-auto pb-2 text-muted">Dashboard dan peta menampilkan data tahun {{ $year }}.</div>
         @endif
     </form>
@@ -179,6 +186,19 @@
         #dashboard-map { height: 640px; width: 100%; border-radius: 14px; z-index: 1; }
         .dashboard-map-legend { background: rgba(255, 255, 255, .96); padding: 10px 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,.12); line-height: 24px; color: #555; }
         .dashboard-map-legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.8; }
+        .dashboard-area-detail { padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+        .dashboard-area-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .dashboard-area-heading h6 { margin: 0; font-weight: 700; color: #172554; }
+        .dashboard-area-heading p { margin: 4px 0 0; color: #64748b; font-size: .875rem; }
+        .dashboard-area-score { display: flex; align-items: center; gap: 10px; }
+        .dashboard-area-score strong { color: #1d4ed8; font-size: 1.5rem; }
+        .dashboard-area-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 16px; }
+        .dashboard-area-metric { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+        .dashboard-area-metric span { display: block; color: #64748b; font-size: .75rem; }
+        .dashboard-area-metric strong { display: block; margin-top: 3px; color: #0f172a; }
+        .dashboard-regency-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; max-height: 320px; overflow: auto; }
+        .dashboard-regency-button { display: flex; justify-content: space-between; gap: 8px; padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; text-align: left; }
+        .dashboard-regency-button:hover, .dashboard-regency-button:focus-visible { border-color: #2563eb; background: #eff6ff; }
     </style>
 
     <!-- Panggil Library Chart.js dan Leaflet -->
@@ -192,6 +212,10 @@
         let mapDataDb = {};
         let mapDataByGeojsonCode = {};
         const geoJsonCodeCounts = {};
+        const geocodeCache = new Map();
+        let geocodeQueue = Promise.resolve();
+        let lastGeocodeRequest = 0;
+        let selectedRegencyMarker = null;
         const mapColors = {
             'Sangat Baik': '#198754',
             'Baik': '#0d6efd',
@@ -295,11 +319,126 @@
             const detail = document.getElementById('dashboard-map-detail');
             detail.hidden = false;
             detail.replaceChildren();
-            addText(detail, 'h6', `${provinceData.province_name} / ${regency.regency_name}`, 'fw-bold mb-2');
-            addText(detail, 'div', `Indeks SPM: ${Number(regency.spm).toFixed(2)}`);
-            addText(detail, 'div', `Kategori: ${regency.category}`);
-            addText(detail, 'div', `Status: ${regency.validation_status}`);
-            addText(detail, 'div', `Tahun: ${mapPayload.year}`);
+            const section = document.createElement('section');
+            section.className = 'dashboard-area-detail';
+            const header = document.createElement('div');
+            header.className = 'dashboard-area-heading';
+            const name = document.createElement('div');
+            addText(name, 'h6', `${regency.regency_name} / ${provinceData.province_name}`);
+            addText(name, 'p', `Data terpublikasi · Tahun ${mapPayload.year}`);
+            header.appendChild(name);
+            const score = document.createElement('div');
+            score.className = 'dashboard-area-score';
+            addText(score, 'strong', Number(regency.spm).toFixed(2));
+            const badge = addText(score, 'span', regency.category, 'badge text-white');
+            badge.style.backgroundColor = mapColors[regency.category];
+            header.appendChild(score);
+            section.appendChild(header);
+            appendMetrics(section, regency.metrics || {});
+            addText(section, 'p', 'Peta memakai lokasi administratif OpenStreetMap; batas kabupaten/kota belum tersedia pada GeoJSON lokal.', 'text-muted small mb-0');
+            detail.appendChild(section);
+            locateRegency(provinceData, regency);
+        }
+
+        function appendMetrics(parent, metrics) {
+            const labels = [
+                ['regencies', 'Kabupaten/kota'], ['kecamatan', 'Kecamatan'], ['pos_damkar', 'Pos damkar'],
+                ['sdm', 'Personel'], ['sdm_bersertifikat', 'Personel bersertifikat'], ['desa', 'Desa terdata'],
+                ['redkar', 'Anggota REDKAR'], ['kelembagaan', 'Kelembagaan'], ['perencanaan', 'Perencanaan'],
+                ['capaian', 'Capaian layanan'], ['sarpras', 'Sarana prasarana'],
+                ['sdm_dimension', 'Dimensi SDM'], ['pemberdayaan', 'Pemberdayaan'],
+            ];
+            const grid = document.createElement('div');
+            grid.className = 'dashboard-area-metrics';
+            labels.forEach(([key, label]) => {
+                if (metrics[key] === null || metrics[key] === undefined) return;
+                const cell = document.createElement('div');
+                cell.className = 'dashboard-area-metric';
+                addText(cell, 'span', label);
+                addText(cell, 'strong', Number(metrics[key]).toLocaleString('id-ID', { maximumFractionDigits: 2 }));
+                grid.appendChild(cell);
+            });
+            if (grid.childElementCount > 0) parent.appendChild(grid);
+        }
+
+        function showProvinceDetail(provinceData) {
+            const detail = document.getElementById('dashboard-map-detail');
+            detail.hidden = false;
+            detail.replaceChildren();
+            if (!provinceData) {
+                addText(detail, 'p', 'Belum ada data wilayah yang cocok untuk provinsi ini.', 'text-muted mb-0');
+                return;
+            }
+
+            const section = document.createElement('section');
+            section.className = 'dashboard-area-detail';
+            const header = document.createElement('div');
+            header.className = 'dashboard-area-heading';
+            const name = document.createElement('div');
+            addText(name, 'h6', provinceData.province_name);
+            addText(name, 'p', `Data terpublikasi · Tahun ${mapPayload.year}`);
+            header.appendChild(name);
+            const score = document.createElement('div');
+            score.className = 'dashboard-area-score';
+            if (provinceData.spm === null || provinceData.spm === undefined) {
+                addText(score, 'span', 'Belum ada data', 'badge bg-secondary');
+            } else {
+                addText(score, 'strong', Number(provinceData.spm).toFixed(2));
+                const badge = addText(score, 'span', provinceData.category, 'badge text-white');
+                badge.style.backgroundColor = mapColors[provinceData.category];
+            }
+            header.appendChild(score);
+            section.appendChild(header);
+            appendMetrics(section, Object.assign({ regencies: provinceData.regency_count }, provinceData.metrics || {}));
+            addText(section, 'h6', 'Kabupaten/kota terdata', 'fw-bold mb-2');
+            const list = document.createElement('div');
+            list.className = 'dashboard-regency-list';
+            if (provinceData.regencies.length === 0) {
+                addText(section, 'p', 'Belum ada data kabupaten/kota yang dipublikasikan untuk tahun ini.', 'text-muted mb-0');
+                detail.appendChild(section);
+                return;
+            }
+            provinceData.regencies.forEach((regency) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'dashboard-regency-button';
+                addText(button, 'span', regency.regency_name);
+                addText(button, 'strong', `${Number(regency.spm).toFixed(2)} · ${regency.category}`);
+                button.addEventListener('click', () => showRegencyDetail(provinceData, regency));
+                list.appendChild(button);
+            });
+            section.appendChild(list);
+            detail.appendChild(section);
+        }
+
+        function locateRegency(provinceData, regency) {
+            const queryName = regency.regency_name.replace(/^(KABUPATEN|KAB\.?|KOTA)\s*/i, '').trim();
+            const query = `${queryName}, ${provinceData.province_name}, Indonesia`;
+            let request = geocodeCache.get(query);
+            if (!request) {
+                request = geocodeQueue.then(async () => {
+                    const delay = Math.max(0, 1100 - (Date.now() - lastGeocodeRequest));
+                    if (delay > 0) await new Promise(resolve => window.setTimeout(resolve, delay));
+                    lastGeocodeRequest = Date.now();
+                    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=id&limit=1&q=${encodeURIComponent(query)}`;
+                    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                    if (!response.ok) throw new Error('Lokasi kabupaten tidak dapat dimuat.');
+                    const results = await response.json();
+                    return results[0] || null;
+                });
+                geocodeQueue = request.catch(() => {});
+                geocodeCache.set(query, request);
+            }
+            request.then(location => {
+                if (!location) throw new Error('Lokasi kabupaten tidak ditemukan.');
+                const bounds = location.boundingbox.map(Number);
+                if (selectedRegencyMarker) dashboardMap.removeLayer(selectedRegencyMarker);
+                selectedRegencyMarker = L.marker([Number(location.lat), Number(location.lon)]).addTo(dashboardMap);
+                selectedRegencyMarker.bindPopup(`${regency.regency_name} · OpenStreetMap`).openPopup();
+                dashboardMap.fitBounds([[bounds[0], bounds[2]], [bounds[1], bounds[3]]], { maxZoom: 11, padding: [24, 24] });
+            }).catch(() => {
+                addText(document.getElementById('dashboard-map-detail'), 'p', 'Lokasi kabupaten belum dapat dimuat. Data SPM tetap ditampilkan.', 'text-muted small mt-2');
+            });
         }
 
         function createProvincePopup(provinceName, provinceData) {
@@ -392,6 +531,7 @@
                                 selectedProvinceLayer.setStyle({ weight: 4, color: '#1f2937', dashArray: '', fillOpacity: .9 });
                                 dashboardMap.fitBounds(selectedProvinceLayer.getBounds(), { padding: [24, 24] });
                                 document.getElementById('dashboard-map-breadcrumb').textContent = `Indonesia / ${provinceName}`;
+                                showProvinceDetail(provinceData);
                             }
                         });
                     }
@@ -446,6 +586,9 @@
 
                 mapPayload = await response.json();
                 rebuildMapIndexes();
+                document.getElementById('dashboard-map-detail').hidden = true;
+                document.getElementById('dashboard-map-detail').replaceChildren();
+                if (selectedRegencyMarker) dashboardMap.removeLayer(selectedRegencyMarker);
                 dashboardMap.removeLayer(dashboardGeoJsonLayer);
                 dashboardGeoJsonLayer = L.geoJson(dashboardGeoJsonData, {
                     style: feature => ({
@@ -469,6 +612,7 @@
                                 selectedProvinceLayer.setStyle({ weight: 4, color: '#1f2937', dashArray: '', fillOpacity: .9 });
                                 dashboardMap.fitBounds(selectedProvinceLayer.getBounds(), { padding: [24, 24] });
                                 document.getElementById('dashboard-map-breadcrumb').textContent = `Indonesia / ${provinceName}`;
+                                showProvinceDetail(provinceData);
                             },
                         });
                     },

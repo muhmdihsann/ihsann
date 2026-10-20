@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ImportHistory;
+use App\Models\News;
 use App\Models\Province;
 use App\Models\Regency;
 use App\Models\SpmData;
@@ -36,6 +37,69 @@ class PublicStatisticsAndImportTest extends TestCase
             ->assertSee('JAWABARAT');
     }
 
+    public function test_public_search_data_includes_real_published_regency_values(): void
+    {
+        $province = Province::create(['name' => 'Jawa Tengah', 'code' => '33000']);
+        $regency = Regency::create(['province_id' => $province->id, 'name' => 'KAB. BANYUMAS', 'code' => '33002']);
+        $import = ImportHistory::create([
+            'user_id' => User::factory()->create()->id,
+            'file_name' => 'spm-2025.xlsx',
+            'year' => 2025,
+            'status' => ImportHistory::Published,
+        ]);
+        SpmData::create([
+            'import_history_id' => $import->id,
+            'regency_id' => $regency->id,
+            'year' => 2025,
+            'nilai_akhir' => 76,
+            'kategori' => 'Baik',
+            'jml_kecamatan' => 27,
+            'jml_pos' => 9,
+            'total_sdm' => 90,
+            'sdm_sertifikat' => 24,
+            'jml_desa' => 331,
+            'jml_redkar' => 920,
+        ]);
+
+        $this->get('/?year=2025')
+            ->assertOk()
+            ->assertSee('KAB. BANYUMAS')
+            ->assertSee('"spm":76', false)
+            ->assertSee('"category":"Baik"', false)
+            ->assertSee('"pos_damkar":9', false)
+            ->assertSee('"sdm":90', false)
+            ->assertSee('searchResults');
+    }
+
+    public function test_public_dashboard_shows_published_news_at_local_jakarta_time(): void
+    {
+        $this->assertSame('Asia/Jakarta', config('app.timezone'));
+        $this->travelTo(now()->setTime(13, 20));
+
+        $publishedNews = News::create([
+            'title' => 'Berita yang sudah terbit',
+            'content' => 'Konten berita publik.',
+            'published_at' => now()->subMinutes(4),
+            'is_published' => true,
+        ]);
+        News::create([
+            'title' => 'Berita terjadwal',
+            'content' => 'Konten berita mendatang.',
+            'published_at' => now()->addHour(),
+            'is_published' => true,
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Berita yang sudah terbit')
+            ->assertDontSee('Berita terjadwal');
+
+        $this->get(route('news.show', $publishedNews->slug))
+            ->assertOk()
+            ->assertSee('Konten berita publik.')
+            ->assertSee('Kembali ke berita');
+    }
+
     public function test_excel_import_persists_data_for_the_selected_year(): void
     {
         Storage::fake('local');
@@ -53,6 +117,12 @@ class PublicStatisticsAndImportTest extends TestCase
 
         $this->assertDatabaseCount('spm_data', 2);
         $this->assertDatabaseHas('spm_data', ['year' => 2025, 'nilai_akhir' => 90]);
+        $this->assertDatabaseHas('spm_data', [
+            'year' => 2025,
+            'kelembagaan' => 'BPBD',
+            'perencanaan_anggaran' => 'RKPD',
+            'capaian_spm' => 92.5,
+        ]);
         $this->assertDatabaseHas('regencies', ['name' => 'Kota Bandung']);
     }
 
@@ -117,7 +187,7 @@ class PublicStatisticsAndImportTest extends TestCase
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray([
-            [null, 'Jawa Barat', 'Kota Bandung', null, null, null, 30, 4, .5, 40, 20, .5, 100, 20, .2, 10, 10, 10, 10, 10, 10, 90, 'Sangat Baik'],
+            [null, 'Jawa Barat', 'Kota Bandung', 'BPBD', 'RKPD', 92.5, 30, 4, .5, 40, 20, .5, 100, 20, .2, 10, 10, 10, 10, 10, 10, 90, 'Sangat Baik'],
             [null, 'Jawa Barat', 'Kabupaten Bogor', null, null, null, 40, 2, .2, 20, 10, .5, 200, 40, .2, 10, 10, 10, 10, 10, 10, 80, 'Baik'],
         ], null, 'A6');
 

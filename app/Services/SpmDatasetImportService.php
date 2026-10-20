@@ -89,6 +89,9 @@ class SpmDatasetImportService
                 'province' => $province,
                 'regency' => $regency,
                 'values' => [
+                    'kelembagaan' => $this->normaliseString($row[3] ?? null),
+                    'perencanaan_anggaran' => $this->normaliseString($row[4] ?? null),
+                    'capaian_spm' => isset($row[5]) && is_numeric($row[5]) ? (float) $row[5] : null,
                     'jml_kecamatan' => (int) ($row[6] ?? 0), 'jml_pos' => (int) ($row[7] ?? 0),
                     'pr_pos_kecamatan' => (float) ($row[8] ?? 0), 'total_sdm' => (int) ($row[9] ?? 0),
                     'sdm_sertifikat' => (int) ($row[10] ?? 0), 'pr_sdm_sertifikat' => (float) ($row[11] ?? 0),
