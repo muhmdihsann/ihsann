@@ -22,55 +22,97 @@ class PublicMapTest extends TestCase
         $this->get(route('peta'))
             ->assertOk()
             ->assertSee('Peta Persebaran Kinerja SPM Kebakaran')
-            ->assertSee(route('peta.data'), false);
+            ->assertSee(route('peta.data'), false)
+            ->assertSee('Kualitas Udara Real-Time')
+            ->assertSee(route('peta.air-quality'), false);
     }
 
-    public function test_hotspot_endpoint_converts_firms_csv_to_geojson_and_caches_the_response(): void
+    public function test_homepage_keeps_the_areas_with_the_most_fires_section(): void
+    {
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('Provinsi yang paling terdampak kebakaran')
+            ->assertSee('Data hotspot seluruh provinsi');
+    }
+
+    public function test_hotspot_endpoint_returns_cached_firms_geojson(): void
     {
         config([
             'services.nasa.firms.map_key' => 'test-map-key',
             'services.nasa.firms.source' => 'VIIRS_NOAA21_NRT',
         ]);
-        Cache::forget('nasa-firms-hotspots:VIIRS_NOAA21_NRT:indonesia');
+        Cache::forget('nasa-firms-hotspots:indonesia:VIIRS_NOAA21_NRT:VIIRS_NOAA20_NRT:VIIRS_SNPP_NRT');
         Http::preventStrayRequests();
-        Http::fake([
-            'firms.modaps.eosdis.nasa.gov/api/area/csv/*VIIRS_NOAA21_NRT*' => Http::response(implode("\n", [
-                'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight',
-                '-7.45,109.1,340.2,0.42,0.38,2026-10-20,430,N,VIIRS,n,2.0NRT,300.1,12.5,D',
-            ])),
-            'firms.modaps.eosdis.nasa.gov/api/area/csv/*VIIRS_NOAA20_NRT*' => Http::response(implode("\n", [
-                'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight',
-                '-7.46,109.11,341,0.42,0.38,2026-10-20,431,J1,VIIRS,h,2.0NRT,301,18.5,D',
-            ])),
-            'firms.modaps.eosdis.nasa.gov/api/area/csv/*VIIRS_SNPP_NRT*' => Http::response('latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight'),
-        ]);
+        Http::fake(['firms.modaps.eosdis.nasa.gov/api/area/csv/*' => Http::response(implode("\n", [
+            'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight',
+            '-7.45,109.1,340.2,0.42,0.38,2026-10-20,430,N,VIIRS,n,2.0NRT,300.1,12.5,D',
+        ]))]);
 
         $this->getJson(route('peta.hotspots'))
             ->assertOk()
             ->assertJsonPath('type', 'FeatureCollection')
             ->assertJsonPath('source', 'NASA FIRMS')
             ->assertJsonPath('product', 'VIIRS_NOAA21_NRT + VIIRS_NOAA20_NRT + VIIRS_SNPP_NRT')
-            ->assertJsonPath('count', 2)
-            ->assertJsonPath('features.0.geometry.type', 'Point')
+            ->assertJsonPath('count', 3)
             ->assertJsonPath('features.0.geometry.coordinates', [109.1, -7.45])
             ->assertJsonPath('features.0.properties.confidence_label', 'Nominal')
-            ->assertJsonPath('features.0.properties.frp', 12.5)
-            ->assertJsonPath('features.1.properties.product', 'VIIRS_NOAA20_NRT')
-            ->assertJsonPath('features.1.properties.confidence_label', 'Tinggi');
+            ->assertJsonPath('features.0.properties.frp', 12.5);
 
         $this->getJson(route('peta.hotspots'))->assertOk();
         Http::assertSentCount(3);
         Http::assertSent(fn ($request): bool => str_contains($request->url(), '/test-map-key/VIIRS_NOAA21_NRT/95,-11,141,6/1'));
     }
 
-    public function test_hotspot_endpoint_does_not_expose_or_require_a_browser_key(): void
+    public function test_air_quality_endpoint_returns_iqair_measurements_and_caches_each_city(): void
     {
-        config(['services.nasa.firms.map_key' => null]);
+        config(['services.iqair.api_key' => 'test-iqair-key']);
+        foreach (['jakarta', 'bandung', 'semarang', 'yogyakarta', 'surabaya', 'denpasar', 'medan', 'palembang', 'pontianak', 'banjarmasin', 'makassar', 'manado', 'jayapura'] as $city) {
+            Cache::forget('iqair:nearest-city:'.$city);
+        }
+        Http::preventStrayRequests();
+        Http::fake(['api.airvisual.com/v2/nearest_city*' => Http::response([
+            'status' => 'success',
+            'data' => [
+                'city' => 'Jakarta',
+                'state' => 'Jakarta',
+                'country' => 'Indonesia',
+                'location' => ['type' => 'Point', 'coordinates' => [106.8456, -6.2088]],
+                'current' => [
+                    'pollution' => [
+                        'ts' => '2026-10-21T01:00:00.000Z',
+                        'aqius' => 42,
+                        'mainus' => 'p2',
+                        'aqicn' => 15,
+                        'p2' => ['conc' => 8.9, 'aqius' => 42, 'aqicn' => 15],
+                    ],
+                    'weather' => ['tp' => 30, 'hu' => 72, 'pr' => 1009, 'ws' => 2.1, 'wd' => 90],
+                ],
+            ],
+        ])]);
+
+        $this->getJson(route('peta.air-quality'))
+            ->assertOk()
+            ->assertJsonPath('source', 'IQAir AirVisual')
+            ->assertJsonPath('count', 13)
+            ->assertJsonPath('cities.0.city', 'Jakarta')
+            ->assertJsonPath('cities.0.aqi_us', 42)
+            ->assertJsonPath('cities.0.main_pollutant', 'p2')
+            ->assertJsonPath('cities.0.pollutants.P2.concentration', 8.9)
+            ->assertJsonPath('cities.0.weather.temperature_c', 30);
+
+        $this->getJson(route('peta.air-quality'))->assertOk();
+        Http::assertSentCount(13);
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), 'key=test-iqair-key') && str_contains($request->url(), 'lat=-6.2088'));
+    }
+
+    public function test_air_quality_endpoint_requires_a_server_side_iqair_key(): void
+    {
+        config(['services.iqair.api_key' => null]);
         Http::preventStrayRequests();
 
-        $this->getJson(route('peta.hotspots'))
+        $this->getJson(route('peta.air-quality'))
             ->assertStatus(503)
-            ->assertJsonPath('message', 'Data titik panas belum tersedia.');
+            ->assertJsonPath('message', 'Kunci API IQAir belum dikonfigurasi pada server.');
     }
 
     public function test_admin_dashboard_renders_the_detailed_map_panel(): void

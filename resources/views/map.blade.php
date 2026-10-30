@@ -132,6 +132,28 @@
     </div>
 </div>
 
+<section class="card border-0 shadow-sm mt-4 overflow-hidden" aria-labelledby="air-quality-heading">
+    <div class="card-body p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div>
+                <h3 class="h5 fw-bold mb-1" id="air-quality-heading"><i class="fas fa-wind text-primary me-2"></i>Kualitas Udara Real-Time</h3>
+                <p class="text-secondary small mb-0">Data stasiun IQAir terdekat untuk kota-kota utama di Indonesia. Klik titik untuk melihat detail polutan dan cuaca.</p>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="air-quality-refresh"><i class="fas fa-rotate me-1"></i>Muat ulang</button>
+        </div>
+        <div id="air-quality-status" class="small text-secondary mb-2" role="status" aria-live="polite">Memuat data IQAir…</div>
+        <div id="air-quality-map" style="height: 460px; width: 100%; border-radius: 12px;"></div>
+        <div class="d-flex flex-wrap gap-3 small text-secondary mt-3">
+            <span><i class="fas fa-circle me-1" style="color:#16a34a"></i>Baik (0–50)</span>
+            <span><i class="fas fa-circle me-1" style="color:#eab308"></i>Sedang (51–100)</span>
+            <span><i class="fas fa-circle me-1" style="color:#f97316"></i>Tidak sehat untuk kelompok sensitif (101–150)</span>
+            <span><i class="fas fa-circle me-1" style="color:#ef4444"></i>Tidak sehat (151–200)</span>
+            <span><i class="fas fa-circle me-1" style="color:#7c3aed"></i>Sangat tidak sehat (201+)</span>
+        </div>
+        <p class="small text-muted mt-2 mb-0">AQI menggunakan standar Amerika Serikat (US AQI). Data diperbarui oleh stasiun IQAir; waktu pengukuran tiap kota dapat berbeda.</p>
+    </div>
+</section>
+
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -181,8 +203,8 @@
     
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     // Fungsi untuk mewarnai provinsi berdasarkan data dari Database
@@ -529,5 +551,107 @@
         window.history.replaceState({}, '', `{{ route('peta') }}?year=${mapPayload.year}`);
     });
 
+</script>
+
+<script>
+    (() => {
+        const target = document.getElementById('air-quality-map');
+        if (!target || !window.L) return;
+
+        const map = L.map(target, { scrollWheelZoom: false }).setView([-2.5, 118], 4.5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+        }).addTo(map);
+        const markers = L.layerGroup().addTo(map);
+        const status = document.getElementById('air-quality-status');
+        const refreshButton = document.getElementById('air-quality-refresh');
+        const format = (value, suffix = '') => value === null || value === undefined || value === '' ? 'Tidak tersedia' : `${value}${suffix}`;
+        const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character]);
+        const aqiColor = (aqi) => {
+            if (aqi === null || aqi === undefined) return '#64748b';
+            if (aqi <= 50) return '#16a34a';
+            if (aqi <= 100) return '#eab308';
+            if (aqi <= 150) return '#f97316';
+            if (aqi <= 200) return '#ef4444';
+            if (aqi <= 300) return '#7c3aed';
+            return '#7f1d1d';
+        };
+        const aqiLabel = (aqi) => {
+            if (aqi === null || aqi === undefined) return 'AQI tidak tersedia';
+            if (aqi <= 50) return 'Baik';
+            if (aqi <= 100) return 'Sedang';
+            if (aqi <= 150) return 'Tidak sehat untuk kelompok sensitif';
+            if (aqi <= 200) return 'Tidak sehat';
+            if (aqi <= 300) return 'Sangat tidak sehat';
+            return 'Berbahaya';
+        };
+        const pollutantNames = { P2: 'PM2.5', P1: 'PM1', P10: 'PM10', O3: 'Ozon', N2: 'Nitrogen dioksida', S2: 'Sulfur dioksida', CO: 'Karbon monoksida' };
+        const dateLabel = (value) => {
+            if (!value) return 'Waktu pengukuran tidak tersedia';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? escape(value) : new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(date) + ' WIB';
+        };
+
+        async function loadAirQuality() {
+            refreshButton.disabled = true;
+            status.textContent = 'Mengambil data kualitas udara dari IQAir…';
+            try {
+                const response = await fetch(@json(route('peta.air-quality')), { headers: { Accept: 'application/json' } });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.message || 'Data kualitas udara belum dapat dimuat.');
+
+                markers.clearLayers();
+                (payload.cities || []).forEach((city) => {
+                    const aqi = city.aqi_us !== null && city.aqi_us !== undefined && Number.isFinite(Number(city.aqi_us))
+                        ? Number(city.aqi_us)
+                        : null;
+                    const color = aqiColor(aqi);
+                    const coordinates = [Number(city.latitude), Number(city.longitude)];
+                    if (!coordinates.every(Number.isFinite)) return;
+
+                    const marker = L.circleMarker(coordinates, {
+                        radius: 11, color: '#ffffff', weight: 2, fillColor: color, fillOpacity: 0.95,
+                    }).addTo(markers);
+                    const pollutants = Object.entries(city.pollutants || {})
+                        .filter(([, item]) => item.concentration !== null && item.concentration !== undefined)
+                        .map(([key, item]) => `<div class="d-flex justify-content-between gap-3 py-1 border-bottom"><span>${escape(pollutantNames[key] || key)}</span><strong>${escape(item.concentration)} µg/m³</strong></div>`)
+                        .join('');
+                    const mainPollutant = pollutantNames[String(city.main_pollutant || '').toUpperCase()] || city.main_pollutant || 'Tidak tersedia';
+                    const weather = city.weather || {};
+                    marker.bindPopup(`<div style="min-width:250px;max-width:320px;font-family:inherit">
+                        <div class="text-uppercase small text-secondary fw-semibold">${escape(city.state || 'Indonesia')}</div>
+                        <h6 class="fw-bold mb-2">${escape(city.city || city.requested_city)}</h6>
+                        <div class="d-flex align-items-center gap-2 mb-2"><span style="font-size:2rem;font-weight:800;color:${color}">${escape(aqi ?? '—')}</span><span><strong>US AQI</strong><br><span style="color:${color}">${escape(aqiLabel(aqi))}</span></span></div>
+                        <div class="small mb-2"><strong>Polutan utama:</strong> ${escape(mainPollutant)}<br><strong>Diukur:</strong> ${dateLabel(city.measured_at)}</div>
+                        <div class="small fw-semibold mt-2 mb-1">Rincian polutan</div>${pollutants || '<div class="small text-secondary">Rincian polutan tidak tersedia pada paket data ini.</div>'}
+                        <div class="small mt-2 pt-2 border-top"><strong>Cuaca:</strong> ${format(weather.temperature_c, ' °C')} · kelembapan ${format(weather.humidity_percent, '%')} · angin ${format(weather.wind_speed_m_s, ' m/s')}</div>
+                        <div class="small text-muted mt-2">AQI CN: ${format(city.aqi_cn)}</div>
+                    </div>`);
+                    marker.bindTooltip(`${escape(city.city || city.requested_city)} · US AQI ${escape(aqi ?? '—')}`);
+                });
+
+                status.textContent = payload.count
+                    ? `${payload.count} lokasi berhasil dimuat · respons diterima ${dateLabel(payload.retrieved_at)}.`
+                    : (payload.message || 'Belum ada data stasiun IQAir untuk lokasi ini.');
+            } catch (error) {
+                status.textContent = error.message || 'Gagal memuat data IQAir. Coba lagi beberapa saat.';
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+        refreshButton.addEventListener('click', loadAirQuality);
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                if (!entries.some((entry) => entry.isIntersecting)) return;
+                observer.disconnect();
+                loadAirQuality();
+            }, { rootMargin: '150px' });
+            observer.observe(target);
+        } else {
+            loadAirQuality();
+        }
+    })();
 </script>
 @endsection

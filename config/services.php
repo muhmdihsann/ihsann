@@ -35,6 +35,10 @@ return [
         ],
     ],
 
+    'iqair' => [
+        'api_key' => env('IQAIR_API_KEY'),
+    ],
+
     'nasa' => [
         'firms' => [
             'map_key' => env('NASA_FIRMS_MAP_KEY'),

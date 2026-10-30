@@ -195,7 +195,7 @@
             <div class="sp-head reveal">
                 <div>
                     <h2>Peta interaktif</h2>
-                    <p>Pilih tampilan untuk melihat sebaran SPM atau titik api aktif.</p>
+                    <p>Pilih tampilan untuk melihat sebaran SPM atau titik api dan kualitas udara terkini.</p>
                 </div>
 
                 <div class="sp-tabs" role="tablist">
@@ -203,7 +203,7 @@
                         <i class="fas fa-chart-pie"></i> Sebaran SPM
                     </button>
                     <button id="pills-fire-tab" role="tab" aria-selected="false" data-target="pills-fire" type="button">
-                        <i class="fas fa-satellite-dish"></i> Titik Kebakaran Real Time
+                        <i class="fas fa-layer-group"></i> Hotspot &amp; Kualitas Udara
                     </button>
                 </div>
             </div>
@@ -216,22 +216,31 @@
                 <div class="sp-pane" id="pills-fire" role="tabpanel">
                     <div id="map-fire"></div>
 
-                    <div id="nasa-loading" class="sp-loading">
+                    <div class="air-map-controls" aria-label="Lapisan peta">
+                        <button type="button" class="is-active" id="toggle-air-layer" aria-pressed="true"><i class="fas fa-wind"></i> Stasiun kualitas udara</button>
+                        <button type="button" class="is-active" id="toggle-fire-layer" aria-pressed="true"><i class="fas fa-fire"></i> Kebakaran</button>
+                    </div>
+
+                    <div id="iqair-loading" class="sp-loading">
                         <i class="fas fa-satellite fa-spin"></i>
-                        <b>Memuat deteksi hotspot satelit</b>
-                        <span>VIIRS NOAA-21 · deteksi 24 jam terakhir</span>
+                        <b>Memuat hotspot dan kualitas udara</b>
+                        <span>NASA FIRMS dan stasiun IQAir</span>
                     </div>
 
                     <div class="sp-fire-legend">
-                        <b>Confidence deteksi NASA FIRMS</b>
+                        <b>Legenda kualitas udara &amp; hotspot</b>
                         <div class="bar">
-                            <i style="background:#fdd64b" title="Rendah"></i>
-                            <i style="background:#ff9b57" title="Nominal"></i>
-                            <i style="background:#fe6a69" title="Tinggi"></i>
+                            <i style="background:#16a34a" title="Baik"></i>
+                            <i style="background:#eab308" title="Sedang"></i>
+                            <i style="background:#f97316" title="Tidak sehat untuk kelompok sensitif"></i>
+                            <i style="background:#ef4444" title="Tidak sehat"></i>
+                            <i style="background:#7c3aed" title="Sangat tidak sehat"></i>
                         </div>
-                        <div class="ends"><span>Rendah</span><span>Tinggi</span></div>
-                        <p id="nasa-data-status" class="sp-fire-status" role="status">Menunggu data NASA FIRMS…</p>
-                        <p class="sp-fire-note">Deteksi hotspot satelit bukan konfirmasi kebakaran di lapangan.</p>
+                        <div class="ends"><span>Baik · 0</span><span>Berbahaya · 300+</span></div>
+                        <p class="sp-fire-note mb-1"><i class="fas fa-fire text-danger"></i> Hotspot satelit NASA FIRMS</p>
+                        <p id="iqair-data-status" class="sp-fire-status" role="status">Menunggu data IQAir…</p>
+                        <p id="nasa-data-status" class="sp-fire-status" role="status">Menunggu hotspot NASA FIRMS…</p>
+                        <p class="sp-fire-note">Klik titik kota untuk melihat AQI, polutan utama, rincian polutan, cuaca, dan waktu pengukuran.</p>
                     </div>
                 </div>
             </div>
@@ -589,6 +598,14 @@
         .sp-pane { display: none; position: relative; height: 560px; }
         .sp-pane.is-active { display: block; }
         .sp-pane > div[id^="map-"] { height: 100%; width: 100%; z-index: 1; }
+        .air-map-controls { position: absolute; top: 18px; right: 16px; z-index: 500; display: grid; gap: 8px; }
+        .air-map-controls button { display: flex; align-items: center; gap: 9px; border: 0; border-radius: 999px; padding: 9px 15px; color: #334155; background: rgba(255,255,255,.96); box-shadow: 0 3px 14px rgba(15,23,42,.18); font-size: .85rem; font-weight: 600; }
+        .air-map-controls button.is-active { color: #1769aa; }
+        .air-map-controls button i { color: #fff; background: #2877b7; border-radius: 50%; padding: 7px; }
+        .aqi-heat { stroke: none; fill-opacity: .16; }
+        .aqi-number-marker { background: transparent; border: 0; }
+        .aqi-number-marker span { display: grid; place-items: center; width: 34px; height: 34px; border: 2px solid rgba(255,255,255,.9); border-radius: 50%; color: #202124; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+        @media (max-width: 640px) { .air-map-controls { top: 10px; right: 8px; gap: 5px; } .air-map-controls button { padding: 7px 10px; font-size: .72rem; } }
 
         .sp-loading {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 999;
@@ -600,8 +617,8 @@
         .sp-loading span { font-size: .85rem; color: var(--slate); }
 
         .sp-fire-legend {
-            position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 999;
-            width: 90%; max-width: 340px; padding: 12px 16px;
+            position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 400;
+            width: min(700px, calc(100% - 28px)); max-width: 700px; padding: 9px 14px;
             background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: 14px;
             box-shadow: 0 8px 24px -12px rgba(19,27,46,.25);
         }
@@ -611,6 +628,7 @@
         .sp-fire-legend .ends { display: flex; justify-content: space-between; margin-top: 6px; font-size: .75rem; color: var(--slate); }
         .sp-fire-status { margin: 8px 0 0; color: var(--ink); font-size: .78rem; font-weight: 600; }
         .sp-fire-note { margin: 4px 0 0; color: var(--slate); font-size: .7rem; line-height: 1.35; }
+        @media (max-width: 640px) { .sp-fire-legend { bottom: 8px; width: calc(100% - 16px); padding: 8px 10px; } .sp-fire-legend .ends { font-size: .65rem; } .sp-fire-status { font-size: .68rem; } }
 
         .pulse-fire-icon { display: flex; align-items: center; justify-content: center; width: 35px; height: 35px; background: rgba(229,72,77,.18); border-radius: 50%; animation: sp-pulse 1.6s infinite; }
         .pulse-fire-icon i { color: var(--ember); font-size: 17px; }
@@ -871,7 +889,7 @@
 
             var mapFire = L.map('map-fire').setView([-2.5489, 118.0149], 5);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors | Data: NASA FIRMS', maxZoom: 18
+                attribution: '&copy; OpenStreetMap contributors | Data: IQAir and NASA FIRMS', maxZoom: 19
             }).addTo(mapFire);
 
             var mapColors = {
@@ -896,6 +914,7 @@
             var hotspotProvinceCounts = [];
             var hotspotFeatures = null;
             var hotspotSummaryElement = document.getElementById('provinsi-terdampak-container');
+            var hotspotSummaryIsVisible = !('IntersectionObserver' in window);
             var hotspotSummaryNote = document.getElementById('provinsi-terdampak-note');
             var allHotspotProvincesLink = document.getElementById('show-all-hotspot-provinces');
             var allHotspotProvincesSection = document.getElementById('daftar-provinsi-terdampak');
@@ -906,6 +925,16 @@
             var geocodeCache = new Map();
             var geocodeQueue = Promise.resolve();
             var lastGeocodeRequest = 0;
+
+            if ('IntersectionObserver' in window) {
+                var hotspotSummaryObserver = new IntersectionObserver(function (entries) {
+                    if (!entries.some(function (entry) { return entry.isIntersecting; })) return;
+                    hotspotSummaryIsVisible = true;
+                    renderHotspotProvinceSummary();
+                    hotspotSummaryObserver.disconnect();
+                }, { rootMargin: '120px' });
+                hotspotSummaryObserver.observe(document.getElementById('provinsi'));
+            }
 
             function addText(parent, tagName, text, className) {
                 var element = document.createElement(tagName);
@@ -1199,7 +1228,7 @@
             }
 
             function renderHotspotProvinceSummary() {
-                if (!hotspotProvinceLayers.length || !Array.isArray(hotspotFeatures)) return;
+                if (!hotspotSummaryIsVisible || !hotspotProvinceLayers.length || !Array.isArray(hotspotFeatures)) return;
 
                 var counts = hotspotProvinceLayers.map(function (entry) {
                     return {
@@ -1433,85 +1462,180 @@
                     console.error('Failed to load public map data:', error);
                 });
 
+            var airGroup = L.layerGroup().addTo(mapFire);
             var fireGroup = L.layerGroup().addTo(mapFire);
+            var airQualityEndpoint = @json(route('peta.air-quality'));
             var hotspotEndpoint = @json(route('peta.hotspots'));
+            var airQualityLoadInProgress = false;
+            var hasLoadedAirQuality = false;
             var hotspotLoadInProgress = false;
             var hasLoadedHotspots = false;
+            var mapDataLoadStarted = false;
+            var hotspotRenderer = L.canvas({ padding: 0.5 });
 
-            function confidenceColor(confidence) {
-                var level = String(confidence || '').toLowerCase();
-                if (level === 'h' || level === 'high' || (Number.isFinite(Number(level)) && Number(level) >= 80)) return '#fe6a69';
-                if (level === 'n' || level === 'nominal' || (Number.isFinite(Number(level)) && Number(level) >= 50)) return '#ff9b57';
-                return '#fdd64b';
+            function aqiColor(aqi) {
+                if (aqi <= 50) return '#16a34a';
+                if (aqi <= 100) return '#eab308';
+                if (aqi <= 150) return '#f97316';
+                if (aqi <= 200) return '#ef4444';
+                if (aqi <= 300) return '#7c3aed';
+                return '#7f1d1d';
+            }
+
+            function aqiLabel(aqi) {
+                if (aqi <= 50) return 'Baik';
+                if (aqi <= 100) return 'Sedang';
+                if (aqi <= 150) return 'Tidak sehat untuk kelompok sensitif';
+                if (aqi <= 200) return 'Tidak sehat';
+                if (aqi <= 300) return 'Sangat tidak sehat';
+                return 'Berbahaya';
+            }
+
+            function airQualityPopup(city) {
+                var popup = document.createElement('div');
+                var aqi = city.aqi_us === null || city.aqi_us === undefined ? null : Number(city.aqi_us);
+                var color = aqi === null ? '#64748b' : aqiColor(aqi);
+                addText(popup, 'small', city.state || 'Indonesia', 'text-uppercase text-muted fw-semibold');
+                addText(popup, 'strong', city.city || city.requested_city, 'd-block mb-1');
+                var headline = addText(popup, 'div', 'US AQI: ' + (aqi === null ? 'Tidak tersedia' : aqi + ' · ' + aqiLabel(aqi)), 'fw-bold mb-1');
+                headline.style.color = color;
+                var names = { P2: 'PM2.5', P1: 'PM1', P10: 'PM10', O3: 'Ozon', N2: 'Nitrogen dioksida', S2: 'Sulfur dioksida', CO: 'Karbon monoksida' };
+                var main = names[String(city.main_pollutant || '').toUpperCase()] || city.main_pollutant || 'Tidak tersedia';
+                addText(popup, 'div', 'Polutan utama: ' + main);
+                addText(popup, 'small', 'Pengukuran: ' + (city.measured_at ? new Date(city.measured_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'Tidak tersedia'), 'd-block mb-2');
+                addText(popup, 'strong', 'Rincian polutan', 'd-block mt-2');
+                Object.entries(city.pollutants || {}).forEach(function (entry) {
+                    var item = entry[1];
+                    if (item.concentration === null || item.concentration === undefined) return;
+                    addText(popup, 'div', (names[entry[0]] || entry[0]) + ': ' + item.concentration + ' µg/m³ (AQI ' + (item.aqi_us ?? '—') + ')', 'small');
+                });
+                var weather = city.weather || {};
+                addText(popup, 'div', 'Cuaca: ' + (weather.temperature_c ?? '—') + ' °C · kelembapan ' + (weather.humidity_percent ?? '—') + '% · angin ' + (weather.wind_speed_m_s ?? '—') + ' m/s', 'small border-top mt-2 pt-2');
+                addText(popup, 'small', 'AQI CN: ' + (city.aqi_cn ?? 'Tidak tersedia'), 'd-block mt-1 text-muted');
+                return popup;
             }
 
             function hotspotPopup(properties) {
                 var popup = document.createElement('div');
-                addText(popup, 'strong', 'Deteksi hotspot satelit', 'd-block mb-1');
-                addText(popup, 'div', 'Confidence: ' + properties.confidence_label);
-                if (properties.brightness !== null) addText(popup, 'div', 'Brightness: ' + properties.brightness + ' K');
-                if (properties.frp !== null) addText(popup, 'div', 'Fire radiative power: ' + properties.frp + ' MW');
-                addText(popup, 'div', 'Satelit: ' + (properties.satellite || '-') + ' · ' + (properties.instrument || '-'));
-                var time = String(properties.acq_time || '').padStart(4, '0');
-                addText(popup, 'div', 'Waktu deteksi: ' + (properties.acq_date || '-') + ' ' + time.slice(0, 2) + ':' + time.slice(2, 4) + ' UTC');
-                addText(popup, 'small', 'NASA FIRMS · hotspot perlu verifikasi lapangan', 'd-block mt-1 text-muted');
+                addText(popup, 'strong', 'Hotspot kebakaran terdeteksi satelit', 'd-block mb-1');
+                addText(popup, 'div', 'Confidence: ' + (properties.confidence_label || 'Tidak tersedia'));
+                if (properties.brightness !== null && properties.brightness !== undefined) addText(popup, 'div', 'Brightness: ' + properties.brightness + ' K');
+                if (properties.frp !== null && properties.frp !== undefined) addText(popup, 'div', 'Fire radiative power: ' + properties.frp + ' MW');
+                addText(popup, 'div', 'Satelit: ' + (properties.satellite || '—') + ' · ' + (properties.instrument || '—'));
+                var acquisitionTime = String(properties.acq_time || '').padStart(4, '0');
+                addText(popup, 'div', 'Waktu deteksi: ' + (properties.acq_date || '—') + ' ' + acquisitionTime.slice(0, 2) + ':' + acquisitionTime.slice(2, 4) + ' UTC');
+                addText(popup, 'small', 'Deteksi hotspot satelit perlu verifikasi lapangan.', 'd-block mt-1 text-muted');
+
                 return popup;
             }
 
-            async function loadNasaHotspots() {
+            async function loadAirQuality() {
+                if (airQualityLoadInProgress) return;
+                airQualityLoadInProgress = true;
+                var loading = document.getElementById('iqair-loading');
+                var status = document.getElementById('iqair-data-status');
+
+                try {
+                    var response = await fetch(airQualityEndpoint, { headers: { Accept: 'application/json' } });
+                    var payload = await response.json();
+                    if (!response.ok) throw new Error(payload.message || 'Data IQAir belum tersedia.');
+
+                    airGroup.clearLayers();
+                    var cities = payload.cities || [];
+                    cities.forEach(function (city) {
+                        var lng = Number(city.longitude);
+                        var lat = Number(city.latitude);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                        var aqi = city.aqi_us === null || city.aqi_us === undefined ? null : Number(city.aqi_us);
+                        var color = aqi === null ? '#64748b' : aqiColor(aqi);
+                        L.circle([lat, lng], { radius: 55000, color: color, weight: 0, fillColor: color, fillOpacity: 0.12, className: 'aqi-heat' }).addTo(airGroup);
+                        var numberIcon = L.divIcon({
+                            className: 'aqi-number-marker',
+                            html: '<span style="background:' + color + '">' + (aqi === null ? '—' : aqi) + '</span>',
+                            iconSize: [34, 34],
+                            iconAnchor: [17, 17],
+                        });
+                        L.marker([lat, lng], { icon: numberIcon }).addTo(airGroup).bindPopup(airQualityPopup(city));
+
+                    });
+                    var updatedAt = new Date(payload.retrieved_at).toLocaleTimeString('id-ID', {
+                        timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit'
+                    });
+                    status.textContent = cities.length + ' lokasi IQAir berhasil dimuat · respons diterima ' + updatedAt + ' WIB';
+                    loading.style.display = 'none';
+                    hasLoadedAirQuality = true;
+                } catch (error) {
+                    status.textContent = hasLoadedAirQuality ? 'Pembaruan gagal; menampilkan data terakhir.' : 'Data IQAir sementara tidak dapat dimuat.';
+                    if (!hasLoadedAirQuality) {
+                        loading.replaceChildren();
+                        addText(loading, 'b', 'Data kualitas udara belum tersedia');
+                        addText(loading, 'span', error.message || 'Coba lagi beberapa saat.');
+                    }
+                } finally {
+                    airQualityLoadInProgress = false;
+                }
+            }
+
+            async function loadHotspots() {
                 if (hotspotLoadInProgress) return;
                 hotspotLoadInProgress = true;
-                var loading = document.getElementById('nasa-loading');
                 var status = document.getElementById('nasa-data-status');
 
                 try {
                     var response = await fetch(hotspotEndpoint, { headers: { Accept: 'application/geo+json, application/json' } });
                     var payload = await response.json();
-                    if (!response.ok) throw new Error(payload.message || 'Data NASA FIRMS belum tersedia.');
+                    if (!response.ok) throw new Error(payload.message || 'Data hotspot NASA FIRMS belum tersedia.');
 
                     fireGroup.clearLayers();
                     hotspotFeatures = payload.features || [];
                     hotspotFeatures.forEach(function (feature) {
                         if (!feature.geometry || feature.geometry.type !== 'Point') return;
-                        var coordinates = feature.geometry.coordinates;
-                        var lng = Number(coordinates[0]);
-                        var lat = Number(coordinates[1]);
-                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                        var longitude = Number(feature.geometry.coordinates[0]);
+                        var latitude = Number(feature.geometry.coordinates[1]);
+                        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
 
                         var properties = feature.properties || {};
-                        var color = confidenceColor(properties.confidence);
-                        var frp = Number(properties.frp) || 0;
-                        L.circleMarker([lat, lng], {
-                            radius: Math.max(5, Math.min(10, 4 + Math.sqrt(frp))),
-                            color: color,
+                        L.circleMarker([latitude, longitude], {
+                            renderer: hotspotRenderer,
+                            radius: 6,
+                            color: '#ffffff',
                             weight: 1,
-                            fillColor: color,
-                            fillOpacity: 0.78,
-                        }).addTo(fireGroup).bindPopup(hotspotPopup(properties));
-
+                            fillColor: '#ef4444',
+                            fillOpacity: 0.9,
+                        }).addTo(fireGroup).bindPopup(function () {
+                            return hotspotPopup(properties);
+                        });
                     });
+
                     renderHotspotProvinceSummary();
-
-                    var updatedAt = new Date(payload.retrieved_at).toLocaleTimeString('id-ID', {
-                        timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit'
-                    });
-                    status.textContent = payload.count + ' hotspot · ' + payload.product + ' · diperbarui ' + updatedAt + ' WIB';
-                    loading.style.display = 'none';
+                    var updatedAt = new Date(payload.retrieved_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+                    status.textContent = payload.count + ' hotspot aktif · NASA FIRMS ' + payload.product + ' · diperbarui ' + updatedAt + ' WIB';
                     hasLoadedHotspots = true;
                 } catch (error) {
-                    status.textContent = hasLoadedHotspots ? 'Pembaruan gagal; menampilkan data terakhir.' : 'Data satelit sementara tidak dapat dimuat.';
-                    if (!hasLoadedHotspots) {
-                        loading.replaceChildren();
-                        addText(loading, 'b', 'Data satelit belum tersedia');
-                        addText(loading, 'span', error.message || 'Coba lagi beberapa saat.');
-                    }
+                    status.textContent = hasLoadedHotspots ? 'Pembaruan hotspot gagal; data terakhir tetap ditampilkan.' : 'Hotspot NASA FIRMS sementara tidak dapat dimuat.';
                 } finally {
                     hotspotLoadInProgress = false;
                 }
             }
 
-            loadNasaHotspots();
-            window.setInterval(loadNasaHotspots, 5 * 60 * 1000);
+            document.getElementById('toggle-air-layer').addEventListener('click', function (event) {
+                var button = event.currentTarget;
+                var enabled = !mapFire.hasLayer(airGroup);
+                if (enabled) airGroup.addTo(mapFire);
+                else mapFire.removeLayer(airGroup);
+                button.classList.toggle('is-active', enabled);
+                button.setAttribute('aria-pressed', String(enabled));
+            });
+
+            document.getElementById('toggle-fire-layer').addEventListener('click', function (event) {
+                var button = event.currentTarget;
+                var enabled = !mapFire.hasLayer(fireGroup);
+                if (enabled) fireGroup.addTo(mapFire);
+                else mapFire.removeLayer(fireGroup);
+                button.classList.toggle('is-active', enabled);
+                button.setAttribute('aria-pressed', String(enabled));
+            });
 
             var tabs = document.querySelectorAll('.sp-tabs button');
             tabs.forEach(function (tab) {
@@ -1526,8 +1650,16 @@
                     document.getElementById(tab.dataset.target).classList.add('is-active');
 
                     setTimeout(function () {
-                        if (tab.id === 'pills-fire-tab') mapFire.invalidateSize();
-                        else mapSpm.invalidateSize();
+                        if (tab.id === 'pills-fire-tab') {
+                            mapFire.invalidateSize();
+                            if (!mapDataLoadStarted) {
+                                mapDataLoadStarted = true;
+                                loadAirQuality();
+                                loadHotspots();
+                                window.setInterval(loadAirQuality, 30 * 60 * 1000);
+                                window.setInterval(loadHotspots, 5 * 60 * 1000);
+                            }
+                        } else mapSpm.invalidateSize();
                     }, 10);
                 });
             });

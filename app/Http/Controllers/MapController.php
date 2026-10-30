@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Province;
 use App\Models\Regency;
 use App\Models\SpmData;
+use App\Services\IqairService;
 use App\Services\PublicMapDataService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -37,80 +38,61 @@ class MapController extends Controller
     public function hotspots(): JsonResponse
     {
         $mapKey = config('services.nasa.firms.map_key');
-        $primarySource = config('services.nasa.firms.source', 'VIIRS_NOAA21_NRT');
+        $source = config('services.nasa.firms.source', 'VIIRS_NOAA21_NRT');
         $allowedSources = ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
 
-        if (! is_string($mapKey) || trim($mapKey) === '') {
-            return response()->json(['message' => 'Data titik panas belum tersedia.'], 503);
-        }
-
-        if (! in_array($primarySource, $allowedSources, true)) {
-            return response()->json(['message' => 'Sumber data hotspot tidak valid.'], 503);
+        if (! is_string($mapKey) || trim($mapKey) === '' || ! in_array($source, $allowedSources, true)) {
+            return response()->json(['message' => 'Kunci atau sumber data NASA FIRMS belum dikonfigurasi dengan benar.'], 503);
         }
 
         $sources = array_values(array_unique(array_merge(
-            [$primarySource],
+            [$source],
             ['VIIRS_NOAA21_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT'],
         )));
 
         try {
-            $hotspotData = Cache::remember(
-                'nasa-firms-hotspots:indonesia:'.implode(':', $sources),
-                now()->addMinutes(5),
-                function () use ($mapKey, $sources): array {
-                    $features = [];
-                    $availableSources = [];
+            $hotspots = Cache::remember('nasa-firms-hotspots:indonesia:'.implode(':', $sources), now()->addMinutes(5), function () use ($mapKey, $sources): array {
+                $features = [];
+                $availableSources = [];
 
-                    foreach ($sources as $source) {
-                        try {
-                            $url = sprintf(
-                                'https://firms.modaps.eosdis.nasa.gov/api/area/csv/%s/%s/95,-11,141,6/1',
-                                rawurlencode(trim($mapKey)),
-                                rawurlencode($source),
-                            );
-
-                            $csv = Http::accept('text/csv')
-                                ->connectTimeout(5)
-                                ->timeout(12)
-                                ->get($url)
-                                ->throw()
-                                ->body();
-
-                            $features = array_merge($features, $this->hotspotFeaturesFromCsv($csv, $source));
-                            $availableSources[] = $source;
-                        } catch (ConnectionException|RequestException|\UnexpectedValueException) {
-                            continue;
-                        }
+                foreach ($sources as $product) {
+                    try {
+                        $url = sprintf(
+                            'https://firms.modaps.eosdis.nasa.gov/api/area/csv/%s/%s/95,-11,141,6/1',
+                            rawurlencode(trim($mapKey)),
+                            rawurlencode($product),
+                        );
+                        $csv = Http::accept('text/csv')->connectTimeout(5)->timeout(12)->get($url)->throw()->body();
+                        $features = array_merge($features, $this->hotspotFeaturesFromCsv($csv, $product));
+                        $availableSources[] = $product;
+                    } catch (ConnectionException|RequestException|\UnexpectedValueException) {
+                        continue;
                     }
+                }
 
-                    if ($availableSources === []) {
-                        throw new \UnexpectedValueException('No NASA FIRMS product returned valid data.');
-                    }
+                if ($availableSources === []) {
+                    throw new \UnexpectedValueException('No NASA FIRMS product returned hotspot data.');
+                }
 
-                    return [
-                        'features' => $features,
-                        'sources' => $availableSources,
-                        'retrieved_at' => now()->toIso8601String(),
-                    ];
-                },
-            );
+                return [
+                    'features' => $features,
+                    'sources' => $availableSources,
+                    'retrieved_at' => now()->toIso8601String(),
+                ];
+            });
         } catch (ConnectionException|RequestException|\UnexpectedValueException $exception) {
-            Log::warning('NASA FIRMS hotspot request failed.', [
-                'source' => $source,
-                'exception' => $exception::class,
-            ]);
+            Log::warning('NASA FIRMS hotspot request failed.', ['exception' => $exception::class]);
 
-            return response()->json(['message' => 'Data satelit sementara tidak dapat dimuat. Coba lagi beberapa saat.'], 503);
+            return response()->json(['message' => 'Data hotspot NASA FIRMS sementara tidak dapat dimuat.'], 503);
         }
 
         return response()->json([
             'type' => 'FeatureCollection',
             'source' => 'NASA FIRMS',
-            'product' => implode(' + ', $hotspotData['sources']),
-            'sources' => $hotspotData['sources'],
-            'retrieved_at' => $hotspotData['retrieved_at'],
-            'count' => count($hotspotData['features']),
-            'features' => $hotspotData['features'],
+            'product' => implode(' + ', $hotspots['sources']),
+            'retrieved_at' => $hotspots['retrieved_at'],
+            'count' => count($hotspots['features']),
+            'features' => $hotspots['features'],
         ]);
     }
 
@@ -119,7 +101,7 @@ class MapController extends Controller
     {
         $lines = preg_split('/\r\n|\r|\n/', trim($csv)) ?: [];
         if ($lines === [] || trim($lines[0]) === '') {
-            throw new \UnexpectedValueException('NASA FIRMS returned no hotspot rows.');
+            throw new \UnexpectedValueException('NASA FIRMS returned no hotspot data.');
         }
 
         $headers = array_map('trim', str_getcsv(array_shift($lines)));
@@ -128,9 +110,6 @@ class MapController extends Controller
         }
         if (! in_array('latitude', $headers, true) || ! in_array('longitude', $headers, true)) {
             throw new \UnexpectedValueException('NASA FIRMS returned an unexpected CSV format.');
-        }
-        if ($lines === []) {
-            return [];
         }
 
         $features = [];
@@ -145,25 +124,16 @@ class MapController extends Controller
             }
 
             $row = array_combine($headers, $values);
-            $latitude = $row['latitude'] ?? null;
-            $longitude = $row['longitude'] ?? null;
-            if (! is_numeric($latitude) || ! is_numeric($longitude)) {
+            if (! is_numeric($row['latitude'] ?? null) || ! is_numeric($row['longitude'] ?? null)) {
                 continue;
             }
 
             $confidence = strtolower(trim((string) ($row['confidence'] ?? '')));
-            $confidenceLabel = match ($confidence) {
-                'h', 'high' => 'Tinggi',
-                'n', 'nominal' => 'Nominal',
-                'l', 'low' => 'Rendah',
-                default => is_numeric($confidence) ? $confidence.'%' : 'Tidak tersedia',
-            };
-
             $features[] = [
                 'type' => 'Feature',
                 'geometry' => [
                     'type' => 'Point',
-                    'coordinates' => [(float) $longitude, (float) $latitude],
+                    'coordinates' => [(float) $row['longitude'], (float) $row['latitude']],
                 ],
                 'properties' => [
                     'acq_date' => $row['acq_date'] ?? null,
@@ -172,7 +142,12 @@ class MapController extends Controller
                     'instrument' => $row['instrument'] ?? null,
                     'product' => $source,
                     'confidence' => $confidence,
-                    'confidence_label' => $confidenceLabel,
+                    'confidence_label' => match ($confidence) {
+                        'h', 'high' => 'Tinggi',
+                        'n', 'nominal' => 'Nominal',
+                        'l', 'low' => 'Rendah',
+                        default => is_numeric($confidence) ? $confidence.'%' : 'Tidak tersedia',
+                    },
                     'brightness' => isset($row['bright_ti4']) && is_numeric($row['bright_ti4']) ? (float) $row['bright_ti4'] : null,
                     'frp' => isset($row['frp']) && is_numeric($row['frp']) ? (float) $row['frp'] : null,
                     'daynight' => $row['daynight'] ?? null,
@@ -181,6 +156,23 @@ class MapController extends Controller
         }
 
         return $features;
+    }
+
+    public function airQuality(IqairService $iqair): JsonResponse
+    {
+        try {
+            $data = $iqair->cities();
+        } catch (\RuntimeException) {
+            return response()->json(['message' => 'Kunci API IQAir belum dikonfigurasi pada server.'], 503);
+        }
+
+        return response()->json([
+            'source' => 'IQAir AirVisual',
+            'retrieved_at' => $data['retrieved_at'],
+            'count' => count($data['cities']),
+            'cities' => $data['cities'],
+            'message' => $data['cities'] === [] ? 'IQAir tidak mengembalikan data. Periksa paket API dan kuota akun.' : null,
+        ]);
     }
 
     public function show(Request $request, Province $province, PublicMapDataService $mapData): View

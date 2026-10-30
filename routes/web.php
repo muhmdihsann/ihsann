@@ -18,6 +18,7 @@ Route::get('/berita/{slug}', [HomeController::class, 'showNews'])->name('news.sh
 Route::get('/peta', [MapController::class, 'index'])->name('peta');
 Route::get('/peta/data', [MapController::class, 'data'])->name('peta.data');
 Route::get('/peta/titik-kebakaran', [MapController::class, 'hotspots'])->name('peta.hotspots');
+Route::get('/peta/kualitas-udara', [MapController::class, 'airQuality'])->name('peta.air-quality');
 Route::get('/provinsi/{province}', [MapController::class, 'show'])->name('provinsi.detail');
 
 Route::middleware('guest')->group(function () {
